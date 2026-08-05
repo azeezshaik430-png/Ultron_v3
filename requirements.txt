@@ -1,0 +1,9 @@
+speechrecognition
+pyttsx3
+pyautogui
+psutil
+pywin32
+requests
+rapidfuzz
+ollama
+pyaudio
