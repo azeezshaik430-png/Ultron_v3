@@ -1,0 +1,16 @@
+{
+    "browser": "brave",
+    "internet": "brave",
+    "web": "brave",
+
+    "code editor": "code",
+    "editor": "code",
+    "visual studio": "code",
+    "vscode": "code",
+
+    "terminal": "powershell",
+    "command prompt": "cmd",
+
+    "music": "spotify",
+    "player": "vlc"
+}
