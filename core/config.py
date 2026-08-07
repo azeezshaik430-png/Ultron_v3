@@ -89,6 +89,15 @@ class Config:
     HEALTH_MONITOR_HEARTBEAT_TIMEOUT: float = 15.0
     HEALTH_MONITOR_FAILURE_THRESHOLD: int = 3
 
+    # Workspace Store & Transaction Settings
+    WORKSPACE_MAX_SIZE_MB: int = 25
+    WORKSPACE_TRANSACTION_TIMEOUT: float = 10.0
+    WORKSPACE_SNAPSHOT_INTERVAL: float = 30.0
+    WORKSPACE_MAX_VERSIONS: int = 50
+    WORKSPACE_MAX_KEYS: int = 1000
+    WORKSPACE_MAX_VALUE_SIZE: int = 5 * 1024 * 1024  # 5 MB
+    WORKSPACE_MAX_SNAPSHOTS: int = 10
+
 
 # Instantiated global singleton
 config = Config()
