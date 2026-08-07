@@ -98,6 +98,13 @@ class Config:
     WORKSPACE_MAX_VALUE_SIZE: int = 5 * 1024 * 1024  # 5 MB
     WORKSPACE_MAX_SNAPSHOTS: int = 10
 
+    # Message Router, Scratchpad & Artifact Settings
+    MESSAGE_ROUTER_MAX_RETRIES: int = 3
+    MESSAGE_ROUTER_DEFAULT_TTL_MS: int = 30000
+    MESSAGE_ROUTER_BACKOFF_BASE: float = 0.1
+    SCRATCHPAD_MAX_SIZE_MB: int = 10
+    ARTIFACT_MAX_STORAGE_MB: int = 2000
+
 
 # Instantiated global singleton
 config = Config()
