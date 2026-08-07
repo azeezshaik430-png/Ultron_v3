@@ -84,6 +84,11 @@ class Config:
     AGENT_BUS_MAX_QUEUE_SIZE: int = 500
     AGENT_BUS_ARTIFACTS_DIR: str = "data/artifacts"
 
+    # Health Monitor Settings
+    HEALTH_MONITOR_INSPECTION_INTERVAL: float = 5.0
+    HEALTH_MONITOR_HEARTBEAT_TIMEOUT: float = 15.0
+    HEALTH_MONITOR_FAILURE_THRESHOLD: int = 3
+
 
 # Instantiated global singleton
 config = Config()
