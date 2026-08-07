@@ -77,6 +77,13 @@ class Config:
     TASK_ENGINE_WATCHDOG_INTERVAL: float = 2.0
     TASK_ENGINE_BASE_RETRY_DELAY: float = 1.0
 
+    # Agent Memory Bus Settings
+    AGENT_BUS_VERSION: int = 1
+    FEATURE_FLAGS_VERSION: int = 1
+    AGENT_BUS_DEFAULT_TTL_MS: int = 30000
+    AGENT_BUS_MAX_QUEUE_SIZE: int = 500
+    AGENT_BUS_ARTIFACTS_DIR: str = "data/artifacts"
+
 
 # Instantiated global singleton
 config = Config()
