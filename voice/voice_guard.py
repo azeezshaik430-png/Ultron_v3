@@ -1,29 +1,61 @@
 """
 ULTRON V3
 Boss Voice Guard
-Lazy Initialized VoiceEncoder Engine with Multi-Segment Embedding Averaging
-Threshold: 0.68 - 0.70
+Preloaded & Cached VoiceEncoder Engine with Multi-Segment Embedding Averaging
+Threshold: 0.68
 """
 
 import os
-import numpy as np
+import threading
+import time
 from pathlib import Path
+from typing import Optional
+import numpy as np
 from core.logger import logger
 
 BOSS_VOICE = "voice/samples/boss_voice.wav"
 THRESHOLD = 0.68
 
 _encoder_instance = None
+_cached_boss_embed: Optional[np.ndarray] = None
+_cached_boss_mtime: float = 0.0
+_preload_thread: Optional[threading.Thread] = None
 
 
 def _get_encoder():
-    """Lazy initialization helper for Resemblyzer VoiceEncoder."""
+    """Initialization helper for Resemblyzer VoiceEncoder."""
     global _encoder_instance
     if _encoder_instance is None:
-        logger.info("Lazily initializing VoiceEncoder neural network for first verification...")
+        logger.info("[VoiceGuard] Initializing VoiceEncoder neural network...")
+        t0 = time.perf_counter()
         from resemblyzer import VoiceEncoder
         _encoder_instance = VoiceEncoder()
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        logger.info(f"[VoiceGuard] VoiceEncoder neural model loaded in {elapsed_ms:.2f} ms.")
     return _encoder_instance
+
+
+def preload_voice_guard() -> None:
+    """
+    Preload VoiceEncoder neural model and Boss voice embedding asynchronously in a background daemon thread during application startup.
+    Eliminates first-verification model loading latency.
+    """
+    global _preload_thread
+    if _preload_thread is None:
+        def _target():
+            t_start = time.perf_counter()
+            logger.info("[VoiceGuard] Preloading VoiceEncoder in background thread...")
+            try:
+                _get_encoder()
+                if os.path.exists(BOSS_VOICE):
+                    _get_boss_embedding()
+                elapsed = (time.perf_counter() - t_start) * 1000.0
+                logger.info(f"[VoiceGuard] Preloading completed in {elapsed:.2f} ms.")
+            except Exception as e:
+                logger.error(f"[VoiceGuard] Background preloading error: {e}")
+
+        _preload_thread = threading.Thread(target=_target, daemon=True, name="VoiceGuardPreloader")
+        _preload_thread.start()
 
 
 def _get_average_embedding(wav_path: str) -> np.ndarray:
@@ -50,8 +82,28 @@ def _get_average_embedding(wav_path: str) -> np.ndarray:
     return full_embed / np.linalg.norm(full_embed)
 
 
+def _get_boss_embedding() -> Optional[np.ndarray]:
+    """Retrieve or compute cached Boss voice embedding with file mtime validation."""
+    global _cached_boss_embed, _cached_boss_mtime
+    if not os.path.exists(BOSS_VOICE):
+        return None
+
+    mtime = os.path.getmtime(BOSS_VOICE)
+    if _cached_boss_embed is not None and mtime == _cached_boss_mtime:
+        return _cached_boss_embed
+
+    logger.info("[VoiceGuard] Computing and caching Boss voice reference embedding...")
+    t0 = time.perf_counter()
+    _cached_boss_embed = _get_average_embedding(BOSS_VOICE)
+    _cached_boss_mtime = mtime
+    elapsed = (time.perf_counter() - t0) * 1000.0
+    logger.info(f"[VoiceGuard] Boss voice reference embedding cached in {elapsed:.2f} ms.")
+    return _cached_boss_embed
+
+
 def verify_boss(test_voice: str) -> bool:
-    """Verify speaker against registered boss_voice.wav."""
+    """Verify speaker against registered boss_voice.wav with telemetry performance tracking."""
+    t_start = time.perf_counter()
     if not os.path.exists(BOSS_VOICE):
         logger.warning("Boss voice sample missing! Prompting voice registration...")
         from voice.voice_auth import register_voice
@@ -61,15 +113,27 @@ def verify_boss(test_voice: str) -> bool:
             return False
 
     try:
-        boss_embed = _get_average_embedding(BOSS_VOICE)
+        t_embed_start = time.perf_counter()
+        boss_embed = _get_boss_embedding()
+        if boss_embed is None:
+            logger.error("Failed to load Boss voice embedding.")
+            return False
+
         test_embed = _get_average_embedding(test_voice)
+        t_embed_end = time.perf_counter()
 
         score = float(
             np.dot(boss_embed, test_embed)
             / (np.linalg.norm(boss_embed) * np.linalg.norm(test_embed))
         )
 
-        logger.info(f"Voice Match Score: {round(score, 3)} (Threshold: {THRESHOLD})")
+        total_verify_ms = (t_embed_end - t_start) * 1000.0
+        embed_calc_ms = (t_embed_end - t_embed_start) * 1000.0
+
+        logger.info(
+            f"[VoiceGuard Telemetry] Voice Match Score: {round(score, 3)} (Threshold: {THRESHOLD}) | "
+            f"Verification Time: {total_verify_ms:.2f} ms (Embedding Calc: {embed_calc_ms:.2f} ms)"
+        )
 
         if score >= THRESHOLD:
             logger.info("Boss Voice Verified successfully.")

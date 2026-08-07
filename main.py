@@ -25,6 +25,11 @@ def start_ultron() -> None:
 
     # Clean runtime reset on every application startup
     session.reset()
+    
+    # Preload VoiceEncoder neural model asynchronously in background daemon thread
+    from voice.voice_guard import preload_voice_guard
+    preload_voice_guard()
+
     speak(f"Welcome back {config.OWNER_NAME}. {config.ASSISTANT_NAME} system is online.")
 
     try:

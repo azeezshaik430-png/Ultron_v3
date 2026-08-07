@@ -1,7 +1,7 @@
 """
 ULTRON V3
 Voice Authentication System
-Lazy Initialized Resemblyzer Engine
+Shared Resemblyzer Engine with Preloaded VoiceEncoder
 """
 
 import os
@@ -21,26 +21,19 @@ VOICE_FOLDER = "voice/samples"
 BOSS_VOICE = os.path.join(VOICE_FOLDER, "boss_voice.wav")
 TEST_VOICE = os.path.join(VOICE_FOLDER, "verify.wav")
 
-_encoder_instance = None
-
 
 def _get_encoder():
-    """Lazy initialization helper for Resemblyzer VoiceEncoder."""
-    global _encoder_instance
-    if _encoder_instance is None:
-        logger.info("Lazily initializing VoiceEncoder neural network...")
-        from resemblyzer import VoiceEncoder
-        _encoder_instance = VoiceEncoder()
-    return _encoder_instance
+    """Initialization helper for Resemblyzer VoiceEncoder shared with VoiceGuard."""
+    from voice.voice_guard import _get_encoder as _guard_get_encoder
+    return _guard_get_encoder()
 
 
 def record_audio(filename: str, duration: int, prompt_msg: str) -> None:
     os.makedirs(VOICE_FOLDER, exist_ok=True)
     logger.info(f"\n🎤 {prompt_msg}")
-    logger.info("Recording starts in 2 seconds...")
-    time.sleep(2)
-
     logger.info("Recording...")
+    # REMOVED: Unnecessary time.sleep(2) wait removed for instant response
+
     audio = sd.rec(
         int(duration * SAMPLE_RATE),
         samplerate=SAMPLE_RATE,
