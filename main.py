@@ -23,7 +23,8 @@ def start_ultron() -> None:
     logger.info("Core Systems ONLINE")
     logger.info("==================================================")
 
-    session.set_auth(False)
+    # Clean runtime reset on every application startup
+    session.reset()
     speak(f"Welcome back {config.OWNER_NAME}. {config.ASSISTANT_NAME} system is online.")
 
     try:
@@ -49,13 +50,15 @@ def start_ultron() -> None:
                         session.enter_sleep()
                         break
 
-                    if command_str in ["exit", "quit", "shutdown ultron"]:
-                        speak("Goodbye Boss. Shutting down.")
+                    from brain.orchestrator import is_ultron_shutdown
+                    if is_ultron_shutdown(command_str, command_str) or command_str in ["exit", "quit"]:
+                        speak("Goodbye Boss. Shutting down ULTRON.")
                         return
 
                     result = orchestrator.process_command(command_str)
                     logger.info(f"{config.ASSISTANT_NAME}: {result}")
-                    speak(result)
+                    if not session.session_data.pop("_already_spoken", False):
+                        speak(result)
                     time.sleep(0.2)
 
             except KeyboardInterrupt:
@@ -66,17 +69,19 @@ def start_ultron() -> None:
     finally:
         # GRACEFUL SHUTDOWN SEQUENCE
         logger.info("Executing Graceful Shutdown Sequence...")
-        # 1. Reset session authentication and state
+        # 1. Save session state
+        session.save()
+        # 2. Reset session authentication and state
         session.reset()
-        # 2. Stop audio synthesis
+        # 3. Stop audio synthesis
         stop_speaking()
-        # 3. Close microphone & audio streams
+        # 4. Close microphone & audio streams
         try:
             sd.stop()
         except Exception:
             pass
         logger.info("ULTRON Session Cleanly Shutdown.")
-        # 4. Flush and close logger handlers
+        # 5. Flush and close logger handlers
         logging.shutdown()
 
 

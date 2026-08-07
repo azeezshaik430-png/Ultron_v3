@@ -46,6 +46,100 @@ from skills.volume_control import (
 )
 
 
+import datetime
+import os
+import time
+from core.config import config
+from skills.windows_control import (
+    lock_pc,
+    shutdown_pc,
+    restart_pc,
+    sign_out_pc,
+    sleep_pc,
+    open_settings,
+)
+
+# Factory Reset, Format Drive, and Delete All Files are permanently unsupported for security.
+PERMANENTLY_UNSUPPORTED_PHRASES = [
+    "factory reset",
+    "reset my computer",
+    "reinstall windows",
+    "restore factory settings",
+    "system reset",
+    "format drive",
+    "format disk",
+    "format c drive",
+    "format d drive",
+    "delete all files",
+    "delete files",
+    "delete everything",
+    "erase all files",
+]
+
+ULTRON_SHUTDOWN_PHRASES = {
+    "shutdown ultron",
+    "exit ultron",
+    "close ultron",
+    "stop ultron",
+    "quit ultron",
+    "terminate ultron",
+}
+
+CONFIRM_RESPONSES = {"yes", "yes boss", "confirm", "continue", "proceed", "do it"}
+CANCEL_RESPONSES = {"no", "cancel", "stop", "never mind"}
+
+DANGEROUS_COMMANDS = {
+    # Action key: (display_name, requires_double, action_phrase, exec_func)
+    "shutdown pc": ("Shutdown PC", False, "CONFIRM SHUTDOWN", shutdown_pc),
+    "shutdown computer": ("Shutdown PC", False, "CONFIRM SHUTDOWN", shutdown_pc),
+    "turn off pc": ("Shutdown PC", False, "CONFIRM SHUTDOWN", shutdown_pc),
+    "turn off computer": ("Shutdown PC", False, "CONFIRM SHUTDOWN", shutdown_pc),
+    "power off computer": ("Shutdown PC", False, "CONFIRM SHUTDOWN", shutdown_pc),
+    "power off windows": ("Shutdown PC", False, "CONFIRM SHUTDOWN", shutdown_pc),
+
+    "restart pc": ("Restart PC", False, "CONFIRM RESTART", restart_pc),
+    "restart computer": ("Restart PC", False, "CONFIRM RESTART", restart_pc),
+    "reboot pc": ("Restart PC", False, "CONFIRM RESTART", restart_pc),
+    "reboot computer": ("Restart PC", False, "CONFIRM RESTART", restart_pc),
+
+    "sign out": ("Sign Out", False, "CONFIRM SIGNOUT", sign_out_pc),
+    "log out windows": ("Sign Out", False, "CONFIRM SIGNOUT", sign_out_pc),
+
+    "lock pc": ("Lock PC", False, "CONFIRM LOCK", lock_pc),
+    "lock computer": ("Lock PC", False, "CONFIRM LOCK", lock_pc),
+}
+
+
+def log_security_audit(command_name: str, result_status: str) -> None:
+    """
+    Log dangerous command audit entry strictly to logs/security.log.
+    Only stores: timestamp, command, result.
+    NEVER stores voice recordings, authentication state, confirmation payload, or personal memory.
+    """
+    try:
+        log_dir = config.LOGS_DIR
+        os.makedirs(log_dir, exist_ok=True)
+        sec_log_path = os.path.join(log_dir, "security.log")
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        entry = f"[{timestamp}] Command: '{command_name}' | Status: '{result_status}'\n"
+        with open(sec_log_path, "a", encoding="utf-8") as f:
+            f.write(entry)
+        logger.info(f"Security Audit Logged: {command_name} -> {result_status}")
+    except Exception as e:
+        logger.error(f"Failed to write security audit log: {e}")
+
+
+def is_ultron_shutdown(command_raw: str, command_clean: str) -> bool:
+    raw = command_raw.lower().strip()
+    clean = command_clean.lower().strip()
+    if raw in ULTRON_SHUTDOWN_PHRASES or clean in ULTRON_SHUTDOWN_PHRASES:
+        return True
+    for phrase in ULTRON_SHUTDOWN_PHRASES:
+        if phrase in raw or phrase in clean:
+            return True
+    return False
+
+
 class Orchestrator:
     """Central Brain Orchestrator Controller."""
 
@@ -66,7 +160,171 @@ class Orchestrator:
         logger.info(f"Processing Command: '{original}' (cleaned: '{command}')")
         event_bus.publish(event_bus.TASK_STARTED, command=original)
 
-        # 0. SECURITY RESET & LOGOUT COMMANDS (REQUIREMENT 2)
+        # 0. PERMANENTLY UNSUPPORTED DESTRUCTIVE COMMANDS SECURITY BLOCK
+        # Factory Reset, Format Drive, and Delete All Files are permanently unsupported for security.
+        for phrase in PERMANENTLY_UNSUPPORTED_PHRASES:
+            if phrase in original or phrase in command:
+                logger.warning(f"Permanently unsupported destructive command attempt blocked: '{original}'")
+                log_security_audit("Destructive Command Attempt", "Permanently Disabled")
+                event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                return "Sorry Boss. That operation is permanently disabled for security reasons."
+
+        # 0A. TIMEOUT CHECK FOR PENDING CONFIRMATION
+        if session.pending_confirmation:
+            if session.is_confirmation_expired(timeout_seconds=15.0):
+                pending_action = session.pending_confirmation.get("action", "")
+                pending_cmd = session.pending_confirmation.get("command", "Unknown Command")
+                log_security_audit(pending_cmd, "Timed Out")
+                session.clear_pending_confirmation()
+                event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                if pending_action == "shutdown_pc" or pending_cmd in ["shutdown pc", "shutdown computer", "turn off pc", "turn off computer", "power off computer", "power off windows"]:
+                    return "Shutdown request timed out.\nOperation cancelled."
+                return "Confirmation timed out."
+
+        # 0B. MATCH DANGEROUS COMMAND REQUEST FIRST (OVERRIDE CHECK)
+        matched_dangerous_key = None
+        for key in DANGEROUS_COMMANDS:
+            if key == original or key == command or key in original or key in command:
+                if not is_ultron_shutdown(original, command):
+                    matched_dangerous_key = key
+                    break
+
+        if matched_dangerous_key:
+            display_name, requires_double, action_phrase, exec_func = DANGEROUS_COMMANDS[matched_dangerous_key]
+
+            # Override existing pending confirmation if present
+            if session.pending_confirmation:
+                old_cmd = session.pending_confirmation.get("command", "Previous Command")
+                log_security_audit(old_cmd, "Overridden")
+                session.clear_pending_confirmation()
+
+            # Set new pending confirmation with unique confirmation ID
+            conf_data = session.set_pending_confirmation(
+                action="shutdown_pc" if matched_dangerous_key in ["shutdown pc", "shutdown computer", "turn off pc", "turn off computer", "power off computer", "power off windows"] else display_name,
+                command=matched_dangerous_key,
+                requires_double=requires_double,
+                action_phrase=action_phrase,
+                exec_func=exec_func
+            )
+            logger.info(f"Initiated dangerous command confirmation [{conf_data['confirmation_id']}] for '{matched_dangerous_key}'")
+            event_bus.publish(event_bus.TASK_FINISHED, command=original)
+            if matched_dangerous_key in ["shutdown pc", "shutdown computer", "turn off pc", "turn off computer", "power off computer", "power off windows"]:
+                return "Are you sure, Boss?\nYou requested to shut down your computer.\nPlease say 'Yes' to continue or 'Cancel' to abort."
+            return "Are you sure, Boss?"
+
+        # 0C. EVALUATE PENDING CONFIRMATION REPLIES
+        if session.pending_confirmation:
+            pending = session.pending_confirmation
+            conf_id = pending["confirmation_id"]
+            cmd_name = pending["command"]
+            action_type = pending.get("action", "")
+            step = pending["step"]
+            requires_double = pending["requires_double"]
+            action_phrase = pending["action_phrase"].lower()
+            exec_func = pending["exec_func"]
+
+            is_shutdown = action_type == "shutdown_pc" or cmd_name in ["shutdown pc", "shutdown computer", "turn off pc", "turn off computer", "power off computer", "power off windows"]
+
+            if is_shutdown:
+                shutdown_confirm_set = {"yes", "yes boss", "confirm", "continue", "proceed"}
+                shutdown_cancel_set = {"no", "cancel", "stop", "never mind"}
+
+                if original in shutdown_confirm_set or command in shutdown_confirm_set:
+                    pending["validated"] = True
+                    pending["confirmed"] = True
+                    log_security_audit(cmd_name, "Confirmed")
+                    confirm_msg = "Confirmation received.\nShutting down your computer.\nGoodbye, Boss."
+                    try:
+                        from voice.speech_output import speak
+                        speak(confirm_msg)
+                        session.session_data["_already_spoken"] = True
+                    except Exception as e:
+                        logger.error(f"TTS confirmation error: {e}")
+
+                    if exec_func:
+                        exec_func()
+                    event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                    return confirm_msg
+                elif original in shutdown_cancel_set or command in shutdown_cancel_set:
+                    log_security_audit(cmd_name, "Cancelled")
+                    session.clear_pending_confirmation()
+                    event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                    return "Shutdown cancelled, Boss."
+                else:
+                    # Unrelated command spoken while shutdown confirmation pending -> cancel & execute new command
+                    log_security_audit(cmd_name, "Cancelled")
+                    session.clear_pending_confirmation()
+                    logger.info("Pending shutdown confirmation cancelled due to unrelated command. Executing new command...")
+                    new_res = self.process_command(original_command)
+                    return f"Shutdown request cancelled.\n{new_res}"
+
+            is_confirmed = original in CONFIRM_RESPONSES or command in CONFIRM_RESPONSES
+            is_step2_confirmed = is_confirmed or (action_phrase in original or action_phrase in command)
+
+            if step == 1:
+                if is_confirmed:
+                    if requires_double:
+                        if not getattr(config, "DANGEROUS_COMMANDS_ENABLED", False):
+                            log_security_audit(cmd_name, "Disabled")
+                            session.clear_pending_confirmation()
+                            event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                            return "This feature is disabled in the current production build."
+
+                        pending["step"] = 2
+                        pending["created_at"] = time.time()
+                        event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                        return f"This action cannot be undone. Say '{pending['action_phrase']}' before execution."
+                    else:
+                        log_security_audit(cmd_name, "Confirmed")
+                        session.clear_pending_confirmation()
+                        res = exec_func() if exec_func else "Executed."
+                        event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                        return "Confirmation received."
+                elif original in CANCEL_RESPONSES or command in CANCEL_RESPONSES:
+                    log_security_audit(cmd_name, "Cancelled")
+                    session.clear_pending_confirmation()
+                    event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                    return "Operation cancelled, Boss."
+                else:
+                    # Unrelated command spoken while confirmation pending -> cancel confirmation & execute new command
+                    log_security_audit(cmd_name, "Cancelled")
+                    session.clear_pending_confirmation()
+                    logger.info("Pending confirmation cancelled due to unrelated command. Proceeding with new command...")
+
+            elif step == 2:
+                if is_step2_confirmed:
+                    if not getattr(config, "DANGEROUS_COMMANDS_ENABLED", False):
+                        log_security_audit(cmd_name, "Disabled")
+                        session.clear_pending_confirmation()
+                        event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                        return "This feature is disabled in the current production build."
+
+                    log_security_audit(cmd_name, "Confirmed")
+                    session.clear_pending_confirmation()
+                    res = exec_func() if exec_func else "Executed."
+                    event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                    return "Confirmation received."
+                else:
+                    log_security_audit(cmd_name, "Cancelled")
+                    session.clear_pending_confirmation()
+                    event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                    return "Operation cancelled, Boss."
+
+        # 0D. ULTRON SHUTDOWN COMMANDS
+        if is_ultron_shutdown(original, command):
+            logger.info("Executing ULTRON Graceful Shutdown Sequence...")
+            session.save()
+            stop_speaking()
+            try:
+                import sounddevice as sd
+                sd.stop()
+            except Exception:
+                pass
+            session.reset()
+            event_bus.publish(event_bus.TASK_FINISHED, command=original)
+            return "Goodbye Boss. Shutting down ULTRON."
+
+        # 0E. SECURITY RESET & LOGOUT COMMANDS (REQUIREMENT 2)
         if command in ["logout", "lock ultron"] or original in ["logout", "lock ultron"]:
             logger.info("Executing Security Logout & Sleep Sequence...")
             session.set_auth(False)
@@ -220,9 +478,6 @@ class Orchestrator:
         if "lock pc" in command:
             lock_pc()
             return "Locking your PC"
-        if "shutdown" in command:
-            shutdown_pc()
-            return "Shutting down your PC"
         if "restart" in command:
             restart_pc()
             return "Restarting your PC"

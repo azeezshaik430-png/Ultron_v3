@@ -1,8 +1,33 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Environment & Dependencies
 venv/
 ultron_env/
+env/
+ENV/
 .env
+.env.*
+
+# Logs and Dynamic User Session/Memory Data
+logs/
+*.log
+data/session.json
+data/conversation_history.json
+data/memory.json
+
+# Voice Samples & Media
 voice/samples/
 *.wav
 *.mp3
+
+# IDEs & Operating System Files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak

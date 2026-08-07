@@ -17,6 +17,7 @@ class Config:
     ASSISTANT_NAME: str = "Ultron"
     OWNER_NAME: str = "Boss"
     VERSION: str = "3.0"
+    DANGEROUS_COMMANDS_ENABLED: bool = False
 
     # AI Model Settings
     DEFAULT_LLM_PROVIDER: str = "ollama"
@@ -68,5 +69,14 @@ class Config:
         return os.path.join(self.LOGS_DIR, self.LOG_FILE_NAME)
 
 
-# Global Config Singleton
+    # Task Engine Settings
+    TASK_ENGINE_WORKER_COUNT: int = 4
+    TASK_ENGINE_QUEUE_MAX_SIZE: int = 1000
+    TASK_ENGINE_MAX_RETRIES: int = 3
+    TASK_ENGINE_LEASE_TIMEOUT: float = 30.0
+    TASK_ENGINE_WATCHDOG_INTERVAL: float = 2.0
+    TASK_ENGINE_BASE_RETRY_DELAY: float = 1.0
+
+
+# Instantiated global singleton
 config = Config()
