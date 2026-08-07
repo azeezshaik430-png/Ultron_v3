@@ -4,8 +4,7 @@ Ollama Client
 """
 
 import ollama
-
-from config.settings import OLLAMA_MODEL
+from core.config import config
 
 
 def ask_ai(prompt: str) -> str:
@@ -13,10 +12,9 @@ def ask_ai(prompt: str) -> str:
     Send a prompt to Ollama
     and return the response.
     """
-
     try:
         response = ollama.chat(
-            model=OLLAMA_MODEL,
+            model=config.OLLAMA_MODEL,
             messages=[
                 {
                     "role": "user",
@@ -24,7 +22,6 @@ def ask_ai(prompt: str) -> str:
                 }
             ]
         )
-
         return response["message"]["content"]
 
     except Exception as e:

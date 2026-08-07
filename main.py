@@ -1,315 +1,84 @@
 """
-ULTRON V3
-Personal AI Assistant Core
-
-Conversation Mode V1
-Smart Memory + Sleep Mode + Wake Word + Voice Authentication
-
-Author: Boss
-Version: 4.0
+ULTRON V3 - Thin Entry Point
+Entry Point & System Launcher with Graceful Shutdown Sequence
+Version: 3.0
 """
 
-
-from voice.speech_input import listen
-
-from voice.speech_output import (
-    speak,
-    speaking,
-    stop_speaking
-)
-
-from voice.wake_listener import (
-    wait_for_wake_word
-)
-
-
-from brain.command_handler import (
-    handle_command
-)
-
-from brain.memory import (
-    recall
-)
-
-
 import time
+import logging
+import sounddevice as sd
+from core.config import config
+from core.logger import logger
+from core.session import session
+from brain.orchestrator import orchestrator
+from voice.wake_listener import wait_for_wake_word
+from voice.speech_input import listen
+from voice.speech_output import speak, stop_speaking
+
+
+def start_ultron() -> None:
+    """Bootstraps ULTRON core infrastructure and starts active loop."""
+    logger.info("==================================================")
+    logger.info(f"{config.ASSISTANT_NAME} V{config.VERSION} - Personal AI Assistant")
+    logger.info("Core Systems ONLINE")
+    logger.info("==================================================")
+
+    session.set_auth(False)
+    speak(f"Welcome back {config.OWNER_NAME}. {config.ASSISTANT_NAME} system is online.")
+
+    try:
+        while True:
+            try:
+                wait_for_wake_word()
+                session.enter_active()
+
+                while session.is_active_mode:
+                    command = listen()
+                    if not command:
+                        continue
+
+                    command_str = command.lower().strip()
+                    if command_str in ["sleep", "go to sleep", "sleep ultron", "good night"]:
+                        speak("Going to sleep Boss. Say Hey Ultron to wake me.")
+                        session.enter_sleep()
+                        break
+
+                    if command_str in ["logout", "lock ultron"]:
+                        session.set_auth(False)
+                        stop_speaking()
+                        session.enter_sleep()
+                        break
+
+                    if command_str in ["exit", "quit", "shutdown ultron"]:
+                        speak("Goodbye Boss. Shutting down.")
+                        return
+
+                    result = orchestrator.process_command(command_str)
+                    logger.info(f"{config.ASSISTANT_NAME}: {result}")
+                    speak(result)
+                    time.sleep(0.2)
+
+            except KeyboardInterrupt:
+                logger.info("Keyboard interrupt detected. Shutting down...")
+                break
+            except Exception as e:
+                logger.error(f"ULTRON Core Loop Error: {e}")
+    finally:
+        # GRACEFUL SHUTDOWN SEQUENCE
+        logger.info("Executing Graceful Shutdown Sequence...")
+        # 1. Reset session authentication and state
+        session.reset()
+        # 2. Stop audio synthesis
+        stop_speaking()
+        # 3. Close microphone & audio streams
+        try:
+            sd.stop()
+        except Exception:
+            pass
+        logger.info("ULTRON Session Cleanly Shutdown.")
+        # 4. Flush and close logger handlers
+        logging.shutdown()
 
-
-
-# =====================================
-# ACTIVE CONVERSATION MODE
-# =====================================
-
-def active_mode():
-
-
-    print(
-        "ACTIVE MODE STARTED"
-    )
-
-
-    while True:
-
-
-        command = listen()
-
-
-
-        if not command:
-
-            continue
-
-
-
-        command = command.lower().strip()
-
-
-
-        print(
-            "\nCommand:",
-            command
-        )
-
-
-
-        # ==============================
-        # SLEEP COMMAND
-        # ==============================
-
-
-        if command in [
-
-            "sleep ultron",
-            "go to sleep",
-            "ultron sleep",
-            "sleep",
-            "good night ultron"
-
-        ]:
-
-
-            speak(
-                "Going to sleep Boss. Say Hey Ultron to wake me."
-            )
-
-
-            return "SLEEP"
-
-
-
-
-        # ==============================
-        # EXIT COMMAND
-        # ==============================
-
-
-        if command in [
-
-            "exit",
-            "quit",
-            "shutdown ultron",
-            "bye ultron",
-            "turn off ultron"
-
-        ]:
-
-
-            speak(
-                "Goodbye Boss. Shutting down."
-            )
-
-
-            return "EXIT"
-
-
-
-
-        # ==============================
-        # NORMAL COMMAND
-        # ==============================
-
-
-        result = handle_command(
-            command
-        )
-
-
-        print(
-            "ULTRON:",
-            result
-        )
-
-
-        speak(
-            result
-        )
-
-
-        time.sleep(0.2)
-        # =====================================
-# SLEEP MODE
-# =====================================
-
-def sleep_mode():
-
-
-    print(
-        "ULTRON sleeping... Waiting for wake word 😴"
-    )
-
-
-    verified = wait_for_wake_word()
-
-
-
-    if verified:
-
-
-        print("VOICE VERIFIED - ENTERING ACTIVE MODE")
-        
-
-
-        return True
-
-
-
-    return False
-
-
-
-
-
-# =====================================
-# ULTRON START
-# =====================================
-
-def start_ultron():
-
-
-    print("=" * 50)
-
-    print(
-        "ULTRON V3"
-    )
-
-    print(
-        "Personal AI Assistant"
-    )
-
-    print(
-        "Voice Input: ONLINE 🎤"
-    )
-
-    print(
-        "Voice Output: ONLINE 🔊"
-    )
-
-    print(
-        "Wake Word: ONLINE 🟢"
-    )
-
-    print(
-        "Voice Authentication: ONLINE 🔐"
-    )
-
-    print(
-        "Conversation Mode: ONLINE 💬"
-    )
-
-    print(
-        "Memory System: ONLINE 🧠"
-    )
-
-    print(
-        "System Ready 🚀"
-    )
-
-    print("=" * 50)
-
-
-
-    # ==============================
-    # MEMORY GREETING
-    # ==============================
-
-
-    name = recall(
-        "name"
-    )
-
-
-
-    if name:
-
-
-        speak(
-            f"Welcome back {name}. Ultron system is online."
-        )
-
-
-    else:
-
-
-        speak(
-            "Hello Boss. Ultron system is online."
-        )
-
-
-
-    time.sleep(1)
-
-
-
-
-    # ==============================
-    # MAIN LOOP
-    # ==============================
-
-
-    while True:
-
-
-
-        # Wait for wake word
-
-        sleep_mode()
-
-
-
-        # Enter conversation mode
-
-        status = active_mode()
-
-
-
-
-        if status == "SLEEP":
-
-
-            continue
-
-
-
-
-        if status == "EXIT":
-
-
-            print(
-                "ULTRON stopped"
-            )
-
-
-            break
-
-
-
-
-
-# =====================================
-# RUN
-# =====================================
 
 if __name__ == "__main__":
-
-
     start_ultron()

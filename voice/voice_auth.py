@@ -1,145 +1,126 @@
 """
 ULTRON V3
 Voice Authentication System
-Boss Voice Register + Verify
+Lazy Initialized Resemblyzer Engine
 """
 
-import sounddevice as sd
-from scipy.io.wavfile import write, read
-from resemblyzer import VoiceEncoder, preprocess_wav
-import numpy as np
 import os
-
+import time
+import numpy as np
+import sounddevice as sd
+from scipy.io.wavfile import write
+from pathlib import Path
+from core.logger import logger
 
 SAMPLE_RATE = 16000
-DURATION = 5
+REGISTER_DURATION = 12
+VERIFY_DURATION = 5
+THRESHOLD = 0.68
 
 VOICE_FOLDER = "voice/samples"
+BOSS_VOICE = os.path.join(VOICE_FOLDER, "boss_voice.wav")
+TEST_VOICE = os.path.join(VOICE_FOLDER, "verify.wav")
 
-BOSS_VOICE = os.path.join(
-    VOICE_FOLDER,
-    "boss_voice.wav"
-)
-
-
-encoder = VoiceEncoder()
+_encoder_instance = None
 
 
-def record_audio(filename):
+def _get_encoder():
+    """Lazy initialization helper for Resemblyzer VoiceEncoder."""
+    global _encoder_instance
+    if _encoder_instance is None:
+        logger.info("Lazily initializing VoiceEncoder neural network...")
+        from resemblyzer import VoiceEncoder
+        _encoder_instance = VoiceEncoder()
+    return _encoder_instance
 
-    os.makedirs(
-        VOICE_FOLDER,
-        exist_ok=True
-    )
 
-    print("\n🎤 Say:")
-    print("Hello ULTRON, this is my voice")
+def record_audio(filename: str, duration: int, prompt_msg: str) -> None:
+    os.makedirs(VOICE_FOLDER, exist_ok=True)
+    logger.info(f"\n🎤 {prompt_msg}")
+    logger.info("Recording starts in 2 seconds...")
+    time.sleep(2)
 
-    input("Press Enter to start...")
-
-    print("Recording...")
-
+    logger.info("Recording...")
     audio = sd.rec(
-        int(DURATION * SAMPLE_RATE),
+        int(duration * SAMPLE_RATE),
         samplerate=SAMPLE_RATE,
         channels=1,
-        dtype="int16"
+        dtype="int16",
     )
-
     sd.wait()
+    write(filename, SAMPLE_RATE, audio)
+    logger.info(f"Saved recording to: {filename}")
 
-    write(
-        filename,
-        SAMPLE_RATE,
-        audio
+
+def register_voice() -> str:
+    """Record 12s reference boss voice sample."""
+    prompt = (
+        "Boss, please read the following sentence clearly:\n"
+        "\"Hello ULTRON, I am your creator and sole operator. System access granted.\""
+    )
+    record_audio(BOSS_VOICE, REGISTER_DURATION, prompt)
+    logger.info("Boss voice registered successfully.")
+    return BOSS_VOICE
+
+
+def _get_average_embedding(wav_path: str) -> np.ndarray:
+    """Compute averaged embedding across audio sub-segments."""
+    from resemblyzer import preprocess_wav
+
+    encoder = _get_encoder()
+    wav = preprocess_wav(Path(wav_path))
+    segment_len = int(1.5 * SAMPLE_RATE)
+
+    if len(wav) > segment_len:
+        segments = []
+        step = int(0.75 * SAMPLE_RATE)
+        for start in range(0, len(wav) - segment_len + 1, step):
+            sub_wav = wav[start : start + segment_len]
+            embed = encoder.embed_utterance(sub_wav)
+            segments.append(embed)
+        if segments:
+            avg_embed = np.mean(segments, axis=0)
+            return avg_embed / np.linalg.norm(avg_embed)
+
+    full_embed = encoder.embed_utterance(wav)
+    return full_embed / np.linalg.norm(full_embed)
+
+
+def verify_voice() -> bool:
+    """Verify 5s sample against boss_voice.wav."""
+    if not os.path.exists(BOSS_VOICE):
+        logger.warning("Boss voice registration required first.")
+        register_voice()
+        if not os.path.exists(BOSS_VOICE):
+            logger.error("No boss voice registered. Verification failed.")
+            return False
+
+    record_audio(TEST_VOICE, VERIFY_DURATION, "Speak your verification sentence...")
+
+    boss_embed = _get_average_embedding(BOSS_VOICE)
+    test_embed = _get_average_embedding(TEST_VOICE)
+
+    score = float(
+        np.dot(boss_embed, test_embed)
+        / (np.linalg.norm(boss_embed) * np.linalg.norm(test_embed))
     )
 
-    print("✅ Recording saved")
+    logger.info(f"Voice Match Score: {round(score, 3)} (Threshold: {THRESHOLD})")
 
-
-
-def register_voice():
-
-    record_audio(BOSS_VOICE)
-
-    print("Processing Boss voice...")
-
-    print("✅ Boss voice registered")
-
-
-
-def verify_voice():
-
-    temp_file = os.path.join(
-        VOICE_FOLDER,
-        "verify.wav"
-    )
-
-    record_audio(temp_file)
-
-
-    print("Processing verification...")
-
-
-    boss_wav = preprocess_wav(
-        BOSS_VOICE
-    )
-
-    test_wav = preprocess_wav(
-        temp_file
-    )
-
-
-    boss_embed = encoder.embed_utterance(
-        boss_wav
-    )
-
-    test_embed = encoder.embed_utterance(
-        test_wav
-    )
-
-
-    similarity = np.dot(
-        boss_embed,
-        test_embed
-    )
-
-
-    print(
-        "Voice Match Score:",
-        similarity
-    )
-
-
-    if similarity > 0.75:
-
-        print("✅ Boss verified")
-
+    if score >= THRESHOLD:
+        logger.info("Boss verified successfully.")
         return True
-
-
     else:
-
-        print("❌ Unknown voice")
-
+        logger.warning("Unknown voice. Access Denied.")
         return False
 
 
-
 if __name__ == "__main__":
-
-    print("1. Register Boss Voice")
-    print("2. Verify Voice")
-
-
+    print("1. Register Boss Voice (12s)")
+    print("2. Verify Voice (5s)")
     choice = input("Choose: ")
 
-
     if choice == "1":
-
         register_voice()
-
-
     elif choice == "2":
-
         verify_voice()

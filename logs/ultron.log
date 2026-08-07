@@ -1,0 +1,251 @@
+[2026-08-08 00:06:10] [INFO] [ULTRON]: Registered LLM Provider: 'ollama'
+[2026-08-08 00:06:16] [INFO] [ULTRON]: Processing Command: 'open brave'
+[2026-08-08 00:06:16] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open brave'}
+[2026-08-08 00:06:16] [INFO] [ULTRON]: Processing Command: 'open browser'
+[2026-08-08 00:06:16] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open browser'}
+[2026-08-08 00:06:16] [INFO] [ULTRON]: Processing Command: 'launch internet'
+[2026-08-08 00:06:16] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'launch internet'}
+[2026-08-08 00:06:16] [INFO] [ULTRON]: Processing Command: 'start terminal'
+[2026-08-08 00:06:16] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'start terminal'}
+[2026-08-08 00:06:16] [INFO] [ULTRON]: Processing Command: 'open code editor'
+[2026-08-08 00:06:16] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open code editor'}
+[2026-08-08 00:06:16] [INFO] [ULTRON]: Processing Command: 'remember  name is azeez'
+[2026-08-08 00:06:16] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'remember  name is azeez'}
+[2026-08-08 00:06:16] [DEBUG] [ULTRON]: Event published: 'MEMORY_UPDATED' with payload {'result': 'I will remember that name is azeez'}
+[2026-08-08 00:06:16] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'remember  name is azeez'}
+[2026-08-08 00:06:16] [INFO] [ULTRON]: Processing Command: 'what is  name'
+[2026-08-08 00:06:16] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'what is  name'}
+[2026-08-08 00:06:16] [DEBUG] [ULTRON]: Calling LLM Provider 'ollama' with prompt: what is  name...
+[2026-08-08 00:06:20] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'what is  name'}
+[2026-08-08 00:06:21] [INFO] [ULTRON]: Saved 216 apps to database.
+[2026-08-08 00:06:21] [INFO] [ULTRON]: ULTRON: Entering sleep mode
+[2026-08-08 00:06:21] [INFO] [ULTRON]: ULTRON: Wake mode activated
+[2026-08-08 00:06:21] [INFO] [ULTRON]: Processing Command: 'open  browser'
+[2026-08-08 00:06:21] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open  browser'}
+[2026-08-08 00:06:21] [INFO] [ULTRON]: Processing Command: 'launch terminal'
+[2026-08-08 00:06:21] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'launch terminal'}
+[2026-08-08 00:06:21] [INFO] [ULTRON]: Processing Command: 'stop now'
+[2026-08-08 00:06:21] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'stop now'}
+[2026-08-08 00:06:21] [DEBUG] [ULTRON]: Calling LLM Provider 'ollama' with prompt: stop now...
+[2026-08-08 00:06:23] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'stop now'}
+[2026-08-08 00:06:23] [INFO] [ULTRON]: Processing Command: 'status'
+[2026-08-08 00:06:23] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'status'}
+[2026-08-08 00:06:23] [INFO] [ULTRON]: Processing Command: 'what time is it'
+[2026-08-08 00:06:23] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'what time is it'}
+[2026-08-08 00:06:23] [INFO] [ULTRON]: Processing Command: 'battery level'
+[2026-08-08 00:06:23] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'battery level'}
+[2026-08-08 00:06:23] [INFO] [ULTRON]: Processing Command: 'what is today's date'
+[2026-08-08 00:06:23] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': "what is today's date"}
+[2026-08-08 00:06:24] [INFO] [ULTRON]: Saved 216 apps to database.
+[2026-08-08 00:06:24] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:06:24] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:06:30] [INFO] [ULTRON]: Didn't understand Boss
+[2026-08-08 00:11:04] [INFO] [ULTRON]: Registered LLM Provider: 'ollama'
+[2026-08-08 00:11:06] [INFO] [ULTRON]: ==================================================
+[2026-08-08 00:11:06] [INFO] [ULTRON]: Ultron V3.0 - Personal AI Assistant
+[2026-08-08 00:11:06] [INFO] [ULTRON]: Core Systems ONLINE
+[2026-08-08 00:11:06] [INFO] [ULTRON]: ==================================================
+[2026-08-08 00:11:11] [INFO] [ULTRON]: ULTRON sleeping... Waiting for wake word...
+[2026-08-08 00:11:18] [INFO] [ULTRON]: Wake word detected
+[2026-08-08 00:11:18] [INFO] [ULTRON]: Boss, please verify your voice... Recording starts in 2 seconds...
+[2026-08-08 00:11:20] [INFO] [ULTRON]: Recording auth voice...
+[2026-08-08 00:11:23] [INFO] [ULTRON]: Saved auth voice to: voice/samples/auth_test.wav
+[2026-08-08 00:11:25] [WARNING] [ULTRON]: Unknown voice detected. Access Denied. Returning to sleep...
+[2026-08-08 00:11:50] [INFO] [ULTRON]: Wake word detected
+[2026-08-08 00:11:50] [INFO] [ULTRON]: Boss, please verify your voice... Recording starts in 2 seconds...
+[2026-08-08 00:11:52] [INFO] [ULTRON]: Recording auth voice...
+[2026-08-08 00:11:55] [INFO] [ULTRON]: Saved auth voice to: voice/samples/auth_test.wav
+[2026-08-08 00:11:55] [WARNING] [ULTRON]: Unknown voice detected. Access Denied. Returning to sleep...
+[2026-08-08 00:12:07] [INFO] [ULTRON]: Wake word detected
+[2026-08-08 00:12:07] [INFO] [ULTRON]: Boss, please verify your voice... Recording starts in 2 seconds...
+[2026-08-08 00:12:09] [INFO] [ULTRON]: Recording auth voice...
+[2026-08-08 00:12:13] [INFO] [ULTRON]: Saved auth voice to: voice/samples/auth_test.wav
+[2026-08-08 00:12:13] [WARNING] [ULTRON]: Unknown voice detected. Access Denied. Returning to sleep...
+[2026-08-08 00:12:32] [INFO] [ULTRON]: Wake word detected
+[2026-08-08 00:12:32] [INFO] [ULTRON]: Boss, please verify your voice... Recording starts in 2 seconds...
+[2026-08-08 00:12:34] [INFO] [ULTRON]: Recording auth voice...
+[2026-08-08 00:12:38] [INFO] [ULTRON]: Saved auth voice to: voice/samples/auth_test.wav
+[2026-08-08 00:12:38] [INFO] [ULTRON]: Boss Verified. Access Granted.
+[2026-08-08 00:12:38] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:12:38] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:12:44] [INFO] [ULTRON]: You said: open Notepad
+[2026-08-08 00:12:44] [INFO] [ULTRON]: Processing Command: 'open notepad'
+[2026-08-08 00:12:44] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open notepad'}
+[2026-08-08 00:12:44] [INFO] [ULTRON]: Ultron: Opening notepad
+[2026-08-08 00:12:46] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:12:46] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:12:53] [INFO] [ULTRON]: You said: close notepad
+[2026-08-08 00:12:53] [INFO] [ULTRON]: Processing Command: 'close notepad'
+[2026-08-08 00:12:53] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'close notepad'}
+[2026-08-08 00:12:53] [INFO] [ULTRON]: Ultron: Closing notepad
+[2026-08-08 00:12:55] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:12:55] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:13:01] [INFO] [ULTRON]: You said: open brave Browser
+[2026-08-08 00:13:01] [INFO] [ULTRON]: Processing Command: 'open brave browser'
+[2026-08-08 00:13:01] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open brave browser'}
+[2026-08-08 00:13:01] [INFO] [ULTRON]: Ultron: Opening brave browser
+[2026-08-08 00:13:04] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:13:04] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:13:10] [INFO] [ULTRON]: You said: close brave Browser
+[2026-08-08 00:13:10] [INFO] [ULTRON]: Processing Command: 'close brave browser'
+[2026-08-08 00:13:10] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'close brave browser'}
+[2026-08-08 00:13:10] [INFO] [ULTRON]: Ultron: Closing brave browser
+[2026-08-08 00:13:12] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:13:12] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:13:18] [INFO] [ULTRON]: Didn't understand Boss
+[2026-08-08 00:13:18] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:13:18] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:13:25] [INFO] [ULTRON]: Didn't understand Boss
+[2026-08-08 00:13:25] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:13:25] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:13:31] [INFO] [ULTRON]: You said: memory recall
+[2026-08-08 00:13:31] [INFO] [ULTRON]: Processing Command: 'memory recall'
+[2026-08-08 00:13:31] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'memory recall'}
+[2026-08-08 00:13:31] [DEBUG] [ULTRON]: Calling LLM Provider 'ollama' with prompt: memory recall...
+[2026-08-08 00:13:39] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'memory recall'}
+[2026-08-08 00:13:39] [INFO] [ULTRON]: Ultron: Boss! I've recalled some previous conversations and information from our past interactions.
+
+I remember that you:
+
+1. Asked about Java programming language.
+2. Asked what "name" refers to (twice, actually).
+
+Other notable memories from your laptop, phone, and personal preferences are also stored in my database. If you'd like me to recall something specific, feel free to ask!
+
+Would you like me to dig up anything else, Boss?
+[2026-08-08 00:14:11] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:14:11] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:14:17] [INFO] [ULTRON]: You said: what is my laptop name
+[2026-08-08 00:14:17] [INFO] [ULTRON]: Processing Command: 'what is  laptop name'
+[2026-08-08 00:14:17] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'what is  laptop name'}
+[2026-08-08 00:14:17] [DEBUG] [ULTRON]: Calling LLM Provider 'ollama' with prompt: what is  laptop name...
+[2026-08-08 00:14:20] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'what is  laptop name'}
+[2026-08-08 00:14:20] [INFO] [ULTRON]: Ultron: Boss! The name of your laptop is HP Victus 15. It's a powerful machine that likely helps you with various tasks, including coding and other activities. Would you like to know something about it or perhaps recall a previous interaction related to it?
+[2026-08-08 00:14:38] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:14:38] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:14:44] [INFO] [ULTRON]: You said: what is my name
+[2026-08-08 00:14:44] [INFO] [ULTRON]: Processing Command: 'what is  name'
+[2026-08-08 00:14:44] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'what is  name'}
+[2026-08-08 00:14:44] [DEBUG] [ULTRON]: Calling LLM Provider 'ollama' with prompt: what is  name...
+[2026-08-08 00:14:48] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'what is  name'}
+[2026-08-08 00:14:48] [INFO] [ULTRON]: Ultron: Boss! As I mentioned earlier, a "name" refers to a word or phrase that identifies a person, place, thing, or concept. It's a label or designation given to an individual or entity.
+
+In my case, ULTRON V3 is my name, which represents my programming, functionality, and purpose as your AI assistant. I'm designed to provide helpful and informative responses to your queries, Boss!
+[2026-08-08 00:15:17] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:15:17] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:15:24] [INFO] [ULTRON]: You said: what is my name
+[2026-08-08 00:15:24] [INFO] [ULTRON]: Processing Command: 'what is  name'
+[2026-08-08 00:15:24] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'what is  name'}
+[2026-08-08 00:15:24] [DEBUG] [ULTRON]: Calling LLM Provider 'ollama' with prompt: what is  name...
+[2026-08-08 00:15:28] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'what is  name'}
+[2026-08-08 00:15:28] [INFO] [ULTRON]: Ultron: Boss! A "name" refers to a word or phrase that identifies a person, place, thing, or concept. It's a label or designation given to an individual or entity.
+
+In my case, ULTRON V3 is my name, which represents my programming, functionality, and purpose as your AI assistant. I'm designed to provide helpful and informative responses to your queries, Boss!
+[2026-08-08 00:15:55] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:15:55] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:16:01] [INFO] [ULTRON]: You said: sleep Ultron
+[2026-08-08 00:16:06] [INFO] [ULTRON]: ULTRON sleeping... Waiting for wake word...
+[2026-08-08 00:16:12] [INFO] [ULTRON]: Wake word detected
+[2026-08-08 00:16:12] [INFO] [ULTRON]: Boss, please verify your voice... Recording starts in 2 seconds...
+[2026-08-08 00:16:14] [INFO] [ULTRON]: Recording auth voice...
+[2026-08-08 00:16:18] [INFO] [ULTRON]: Saved auth voice to: voice/samples/auth_test.wav
+[2026-08-08 00:16:18] [WARNING] [ULTRON]: Unknown voice detected. Access Denied. Returning to sleep...
+[2026-08-08 00:17:25] [INFO] [ULTRON]: Wake word detected
+[2026-08-08 00:17:25] [INFO] [ULTRON]: Boss, please verify your voice... Recording starts in 2 seconds...
+[2026-08-08 00:17:26] [INFO] [ULTRON]: Shutting down ULTRON...
+[2026-08-08 00:19:14] [INFO] [ULTRON]: Saved 216 apps to database.
+[2026-08-08 00:19:14] [INFO] [ULTRON]: ULTRON: Entering sleep mode
+[2026-08-08 00:19:14] [INFO] [ULTRON]: ULTRON: Wake mode activated
+[2026-08-08 00:19:14] [INFO] [ULTRON]: Saved 216 apps to database.
+[2026-08-08 00:19:15] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:19:15] [INFO] [ULTRON]: Speak Boss...
+[2026-08-08 00:19:21] [INFO] [ULTRON]: Didn't understand Boss
+[2026-08-08 00:19:43] [INFO] [ULTRON]: Registered LLM Provider: 'ollama'
+[2026-08-08 00:19:43] [INFO] [ULTRON]: Processing Command: 'open brave' (cleaned: 'open brave')
+[2026-08-08 00:19:43] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open brave'}
+[2026-08-08 00:19:43] [INFO] [ULTRON]: Processing Command: 'open browser' (cleaned: 'open browser')
+[2026-08-08 00:19:43] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open browser'}
+[2026-08-08 00:19:43] [INFO] [ULTRON]: Processing Command: 'launch internet' (cleaned: 'launch internet')
+[2026-08-08 00:19:43] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'launch internet'}
+[2026-08-08 00:19:43] [INFO] [ULTRON]: Processing Command: 'start terminal' (cleaned: 'start terminal')
+[2026-08-08 00:19:43] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'start terminal'}
+[2026-08-08 00:19:43] [INFO] [ULTRON]: Processing Command: 'open code editor' (cleaned: 'open code editor')
+[2026-08-08 00:19:43] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open code editor'}
+[2026-08-08 00:19:48] [INFO] [ULTRON]: Registered LLM Provider: 'ollama'
+[2026-08-08 00:19:48] [INFO] [ULTRON]: Processing Command: 'please open my browser' (cleaned: 'open  browser')
+[2026-08-08 00:19:48] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'please open my browser'}
+[2026-08-08 00:19:48] [INFO] [ULTRON]: Processing Command: 'launch terminal' (cleaned: 'launch terminal')
+[2026-08-08 00:19:48] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'launch terminal'}
+[2026-08-08 00:19:48] [INFO] [ULTRON]: Processing Command: 'ultron stop now' (cleaned: 'stop now')
+[2026-08-08 00:19:48] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'ultron stop now'}
+[2026-08-08 00:19:48] [DEBUG] [ULTRON]: Calling LLM Provider 'ollama' with prompt: stop now...
+[2026-08-08 00:19:51] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'stop now'}
+[2026-08-08 00:19:56] [INFO] [ULTRON]: Registered LLM Provider: 'ollama'
+[2026-08-08 00:20:02] [INFO] [ULTRON]: Registered LLM Provider: 'ollama'
+[2026-08-08 00:20:02] [INFO] [ULTRON]: Processing Command: 'what is my name' (cleaned: 'what is  name')
+[2026-08-08 00:20:02] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'what is my name'}
+[2026-08-08 00:20:02] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'what is my name'}
+[2026-08-08 00:20:08] [INFO] [ULTRON]: Registered LLM Provider: 'ollama'
+[2026-08-08 00:20:08] [INFO] [ULTRON]: Processing Command: 'what is my laptop' (cleaned: 'what is  laptop')
+[2026-08-08 00:20:08] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'what is my laptop'}
+[2026-08-08 00:20:08] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'what is my laptop'}
+[2026-08-08 00:20:13] [INFO] [ULTRON]: Registered LLM Provider: 'ollama'
+[2026-08-08 00:20:13] [INFO] [ULTRON]: Processing Command: 'show my memories' (cleaned: 'show  memories')
+[2026-08-08 00:20:13] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'show my memories'}
+[2026-08-08 00:20:13] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'show my memories'}
+[2026-08-08 00:22:42] [INFO] [ULTRON]: Registered LLM Provider: 'ollama'
+[2026-08-08 00:22:42] [INFO] [ULTRON]: Processing Command: 'open brave' (cleaned: 'open brave')
+[2026-08-08 00:22:42] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open brave'}
+[2026-08-08 00:22:42] [INFO] [ULTRON]: Processing Command: 'open browser' (cleaned: 'open browser')
+[2026-08-08 00:22:42] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open browser'}
+[2026-08-08 00:22:42] [INFO] [ULTRON]: Processing Command: 'launch internet' (cleaned: 'launch internet')
+[2026-08-08 00:22:42] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'launch internet'}
+[2026-08-08 00:22:42] [INFO] [ULTRON]: Processing Command: 'start terminal' (cleaned: 'start terminal')
+[2026-08-08 00:22:42] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'start terminal'}
+[2026-08-08 00:22:42] [INFO] [ULTRON]: Processing Command: 'open code editor' (cleaned: 'open code editor')
+[2026-08-08 00:22:42] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open code editor'}
+[2026-08-08 00:22:53] [INFO] [ULTRON]: Registered LLM Provider: 'ollama'
+[2026-08-08 00:22:53] [INFO] [ULTRON]: Processing Command: 'logout' (cleaned: 'logout')
+[2026-08-08 00:22:53] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'logout'}
+[2026-08-08 00:22:53] [INFO] [ULTRON]: Executing Security Logout & Sleep Sequence...
+[2026-08-08 00:22:53] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'logout'}
+[2026-08-08 00:23:30] [INFO] [ULTRON]: Registered LLM Provider: 'ollama'
+[2026-08-08 00:23:31] [INFO] [ULTRON]: Processing Command: 'open brave' (cleaned: 'open brave')
+[2026-08-08 00:23:31] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open brave'}
+[2026-08-08 00:23:31] [INFO] [ULTRON]: Processing Command: 'open browser' (cleaned: 'open browser')
+[2026-08-08 00:23:31] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open browser'}
+[2026-08-08 00:23:31] [INFO] [ULTRON]: Processing Command: 'launch internet' (cleaned: 'launch internet')
+[2026-08-08 00:23:31] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'launch internet'}
+[2026-08-08 00:23:31] [INFO] [ULTRON]: Processing Command: 'start terminal' (cleaned: 'start terminal')
+[2026-08-08 00:23:31] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'start terminal'}
+[2026-08-08 00:23:31] [INFO] [ULTRON]: Processing Command: 'open code editor' (cleaned: 'open code editor')
+[2026-08-08 00:23:31] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'open code editor'}
+[2026-08-08 00:23:31] [INFO] [ULTRON]: Processing Command: 'remember my name is azeez' (cleaned: 'remember  name is azeez')
+[2026-08-08 00:23:31] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'remember my name is azeez'}
+[2026-08-08 00:23:31] [DEBUG] [ULTRON]: Event published: 'MEMORY_UPDATED' with payload {'result': 'I will remember that name is azeez'}
+[2026-08-08 00:23:31] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'remember my name is azeez'}
+[2026-08-08 00:23:31] [INFO] [ULTRON]: Processing Command: 'what is my name' (cleaned: 'what is  name')
+[2026-08-08 00:23:31] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'what is my name'}
+[2026-08-08 00:23:31] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'what is my name'}
+[2026-08-08 00:23:32] [INFO] [ULTRON]: Saved 216 apps to database.
+[2026-08-08 00:23:32] [INFO] [ULTRON]: ULTRON: Entering sleep mode
+[2026-08-08 00:23:32] [INFO] [ULTRON]: ULTRON: Wake mode activated
+[2026-08-08 00:23:32] [INFO] [ULTRON]: Processing Command: 'please open my browser' (cleaned: 'open  browser')
+[2026-08-08 00:23:32] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'please open my browser'}
+[2026-08-08 00:23:32] [INFO] [ULTRON]: Processing Command: 'launch terminal' (cleaned: 'launch terminal')
+[2026-08-08 00:23:32] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'launch terminal'}
+[2026-08-08 00:23:32] [INFO] [ULTRON]: Processing Command: 'ultron stop now' (cleaned: 'stop now')
+[2026-08-08 00:23:32] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'ultron stop now'}
+[2026-08-08 00:23:32] [DEBUG] [ULTRON]: Calling LLM Provider 'ollama' with prompt: stop now...
+[2026-08-08 00:23:34] [DEBUG] [ULTRON]: Event published: 'TASK_FINISHED' with payload {'command': 'stop now'}
+[2026-08-08 00:23:34] [INFO] [ULTRON]: Processing Command: 'ultron status' (cleaned: 'status')
+[2026-08-08 00:23:34] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'ultron status'}
+[2026-08-08 00:23:34] [INFO] [ULTRON]: Processing Command: 'what time is it' (cleaned: 'what time is it')
+[2026-08-08 00:23:34] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'what time is it'}
+[2026-08-08 00:23:34] [INFO] [ULTRON]: Processing Command: 'battery level' (cleaned: 'battery level')
+[2026-08-08 00:23:34] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': 'battery level'}
+[2026-08-08 00:23:34] [INFO] [ULTRON]: Processing Command: 'what is today's date' (cleaned: 'what is today's date')
+[2026-08-08 00:23:34] [DEBUG] [ULTRON]: Event published: 'TASK_STARTED' with payload {'command': "what is today's date"}
+[2026-08-08 00:23:35] [INFO] [ULTRON]: Saved 216 apps to database.
+[2026-08-08 00:23:35] [INFO] [ULTRON]: Listening Boss...
+[2026-08-08 00:23:35] [INFO] [ULTRON]: Speak Boss...
