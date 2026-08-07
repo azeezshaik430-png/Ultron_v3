@@ -112,6 +112,11 @@ class Config:
     GC_MAX_BATCH: int = 500
     METRICS_EXPORT_INTERVAL: float = 5.0
 
+    # Service Manager Settings
+    SERVICE_STARTUP_TIMEOUT: float = 10.0
+    SERVICE_SHUTDOWN_TIMEOUT: float = 10.0
+    SERVICE_HEALTH_INTERVAL: float = 5.0
+
 
 # Instantiated global singleton
 config = Config()

@@ -30,7 +30,10 @@ class TransactionContext:
     is_active: bool = True
 
 
-class TransactionManager:
+from core.interfaces import IService
+
+
+class TransactionManager(IService):
     """
     Optimistic Transaction Manager.
     
@@ -58,6 +61,40 @@ class TransactionManager:
         # Telemetry metrics counters
         self._total_committed = 0
         self._total_rolled_back = 0
+        self._total_conflicts = 0
+        self._total_expired = 0
+        self._total_commit_time_ms = 0.0
+        self._is_initialized = False
+
+    def initialize(self) -> None:
+        """Initialize TransactionManager."""
+        with self._lock:
+            if self._is_initialized:
+                return
+            self._is_initialized = True
+            logger.info("[TransactionManager] Initialized cleanly.")
+
+    def shutdown(self) -> None:
+        """Shutdown TransactionManager."""
+        with self._lock:
+            self._active_txs.clear()
+            self._is_initialized = False
+            logger.info("[TransactionManager] Shutdown cleanly.")
+
+    def health_check(self) -> Dict[str, Any]:
+        """Return health status."""
+        with self._lock:
+            return {
+                "status": "HEALTHY" if self._is_initialized else "STOPPED",
+                "healthy": self._is_initialized,
+                "active_transactions": len(self._active_txs),
+            }
+
+    def configure(self, config_data: Dict[str, Any]) -> None:
+        """Configure TransactionManager."""
+        with self._lock:
+            if "timeout" in config_data:
+                self.default_timeout = float(config_data["timeout"])
         self._conflict_count = 0
         self._expired_count = 0
         self._total_commit_time_ms = 0.0
