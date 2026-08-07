@@ -256,15 +256,26 @@ class WorkspaceStore(IService):
             snapshot_entries = snapshot["entries"]
 
             for k, entry in snapshot_entries.items():
-                self._store[k] = WorkspaceEntry(
-                    key=entry.key,
-                    value=entry.value,
-                    version=entry.version,
-                    task_id=entry.task_id,
-                    owner_agent=entry.owner_agent,
-                    created_at=entry.created_at,
-                    updated_at=entry.updated_at,
-                )
+                if isinstance(entry, dict):
+                    self._store[k] = WorkspaceEntry(
+                        key=entry.get("key", k),
+                        value=entry.get("value"),
+                        version=entry.get("version", 1),
+                        task_id=entry.get("task_id", ""),
+                        owner_agent=entry.get("owner_agent", "system"),
+                        created_at=entry.get("created_at", time.time()),
+                        updated_at=entry.get("updated_at", time.time()),
+                    )
+                elif hasattr(entry, "key"):
+                    self._store[k] = WorkspaceEntry(
+                        key=entry.key,
+                        value=entry.value,
+                        version=entry.version,
+                        task_id=entry.task_id,
+                        owner_agent=entry.owner_agent,
+                        created_at=entry.created_at,
+                        updated_at=entry.updated_at,
+                    )
 
             if "workspace_version" in snapshot:
                 self._global_version = snapshot["workspace_version"]

@@ -105,6 +105,13 @@ class Config:
     SCRATCHPAD_MAX_SIZE_MB: int = 10
     ARTIFACT_MAX_STORAGE_MB: int = 2000
 
+    # Recovery Journal, Garbage Collector & Metrics Settings
+    RECOVERY_JOURNAL_PATH: str = "data/bus_journal.log"
+    RECOVERY_CHECKPOINT_INTERVAL: float = 60.0
+    GC_INTERVAL: float = 30.0
+    GC_MAX_BATCH: int = 500
+    METRICS_EXPORT_INTERVAL: float = 5.0
+
 
 # Instantiated global singleton
 config = Config()
