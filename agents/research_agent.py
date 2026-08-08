@@ -35,10 +35,10 @@ class ResearchTaskStatus(str, Enum):
 @dataclass
 class ResearchSource:
     """Structured representation of an information source."""
-    source_id: str
-    url_or_path: str
-    title: str
-    snippet: str
+    source_id: str = ""
+    url_or_path: str = ""
+    title: str = ""
+    snippet: str = ""
     reliability_score: float = 1.0
     domain: str = ""
     timestamp: float = field(default_factory=time.time)
@@ -51,7 +51,10 @@ class ResearchSource:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ResearchSource":
-        return cls(**data)
+        d = dict(data)
+        if not d.get("source_id"):
+            d["source_id"] = f"src_{uuid.uuid4().hex[:6]}"
+        return cls(**d)
 
 
 @dataclass
