@@ -114,11 +114,81 @@ def speak(text: str, language: str = None) -> bool:
     _stop_flag.clear()
     _speaking_flag.set()
 
-    if language == "te":
-        return _speak_telugu_piper(clean_txt)
-    else:
-        return _speak_english_sapi5(clean_txt)
+    from voice.speech_input import start_interruption_listener, stop_interruption_listener
+    start_interruption_listener()
 
+    try:
+        if language == "te":
+            # Detect available Telugu Windows voices dynamically
+            import pyttsx3
+            engine_test = pyttsx3.init()
+            voices = engine_test.getProperty("voices")
+            sapi_telugu_voice = None
+            for v in voices:
+                if "telugu" in v.name.lower() or "te-" in v.id.lower():
+                    sapi_telugu_voice = v
+                    break
+            
+            if sapi_telugu_voice:
+                return _speak_sapi5_with_voice(clean_txt, sapi_telugu_voice, "te")
+            else:
+                return _speak_telugu_piper(clean_txt)
+        else:
+            return _speak_english_sapi5(clean_txt)
+    finally:
+        stop_interruption_listener()
+
+def _speak_sapi5_with_voice(clean_txt: str, voice, lang: str) -> bool:
+    """Synthesize text using a specific Windows SAPI5 voice."""
+    global _current_engine
+    _init_com_if_needed()
+
+    logger.info(f"[VoiceOutput] TTS_ENGINE_INITIALIZING (Lang: {lang})")
+    engine = None
+    with _engine_lock:
+        try:
+            engine = pyttsx3.init()
+            rate = getattr(config, "VOICE_RATE", 170)
+            volume = getattr(config, "VOICE_VOLUME", 1.0)
+            engine.setProperty("rate", rate)
+            engine.setProperty("volume", volume)
+            engine.setProperty("voice", voice.id)
+            
+            logger.info(
+                f"[VoiceOutput] TTS_SELECTED_VOICE: '{voice.name}' | "
+                f"Gender: Unknown | ID: '{voice.id}'"
+            )
+            logger.info(f"[VoiceOutput] TTS_ENGINE_READY (Voice: '{voice.name}')")
+            _current_engine = engine
+        except Exception as err:
+            logger.error(f"[VoiceOutput] TTS_ERROR initializing SAPI5 engine: {err}")
+            _speaking_flag.clear()
+            _current_engine = None
+            return False
+
+    interrupted = False
+    logger.info("[VoiceOutput] TTS_PLAYBACK_STARTED")
+
+    try:
+        if not _stop_flag.is_set():
+            engine.say(clean_txt)
+            engine.runAndWait()
+
+        if _stop_flag.is_set():
+            interrupted = True
+            logger.info("[VoiceOutput] TTS_INTERRUPTED during speech playback")
+        else:
+            logger.info("[VoiceOutput] TTS_PLAYBACK_FINISHED")
+
+    except Exception as e:
+        logger.error(f"[VoiceOutput] TTS_ERROR during speech playback: {e}")
+        interrupted = True
+    finally:
+        with _engine_lock:
+            _current_engine = None
+        _speaking_flag.clear()
+
+    return not interrupted
 
 def _speak_telugu_piper(clean_txt: str) -> bool:
     """Synthesize Telugu text using local Piper ONNX male voice engine."""

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 ULTRON V3 - Central Agent Manager
 Master lifecycle supervisor, registration authority, capability discovery, task dispatcher, and health inspector for all Phase 2B Ultron agents.
@@ -5,14 +6,16 @@ Reuses Phase 2A AgentMemoryBus, ServiceManager, AgentRegistry, HealthMonitor, an
 """
 
 import threading
-from typing import Dict, Any, List, Optional, Type
+from typing import Dict, Any, List, Optional, Type, TYPE_CHECKING
 
 from core.config import config
 from core.interfaces import IService
 from core.logger import logger
-from agents.base_ultron_agent import BaseUltronAgent
 from brain.agent_bus import AgentMemoryBus
 from brain.bus_types import CircuitBreakerState, AgentStatus
+
+if TYPE_CHECKING:
+    from agents.base_ultron_agent import BaseUltronAgent
 
 
 class AgentManager(IService):

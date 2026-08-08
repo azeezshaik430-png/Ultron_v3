@@ -240,7 +240,7 @@ class ResearchAgent(BaseUltronAgent):
 
         # ACL check for file-based search
         if search_path:
-            self._verify_workspace_acl(search_path, AccessTier.READ)
+            self._verify_workspace_acl(search_path, AccessTier.READ_ONLY)
 
         sources: List[ResearchSource] = []
 

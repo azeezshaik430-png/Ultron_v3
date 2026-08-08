@@ -207,7 +207,7 @@ class CodingAgent(BaseUltronAgent):
         if not file_path:
             raise ValueError("File inspection requires 'file_path'.")
 
-        self._verify_workspace_acl(file_path, AccessTier.READ)
+        self._verify_workspace_acl(file_path, AccessTier.READ_ONLY)
 
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -231,7 +231,7 @@ class CodingAgent(BaseUltronAgent):
         root_path = payload.get("root_path") or os.getcwd()
         max_depth = int(payload.get("max_depth", 3))
 
-        self._verify_workspace_acl(root_path, AccessTier.READ)
+        self._verify_workspace_acl(root_path, AccessTier.READ_ONLY)
 
         tree: List[Dict[str, Any]] = []
 
@@ -293,7 +293,7 @@ class CodingAgent(BaseUltronAgent):
         if not target_file or new_content is None:
             raise ValueError("Code modification requires 'target_file' and 'content'.")
 
-        self._verify_workspace_acl(target_file, AccessTier.WRITE)
+        self._verify_workspace_acl(target_file, AccessTier.OWNER)
 
         # Step 1: Backup original content for transaction rollback
         original_content = ""
@@ -359,7 +359,7 @@ class CodingAgent(BaseUltronAgent):
         file_path = payload.get("file_path")
 
         if file_path and not code:
-            self._verify_workspace_acl(file_path, AccessTier.READ)
+            self._verify_workspace_acl(file_path, AccessTier.READ_ONLY)
             if os.path.exists(file_path):
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     code = f.read()
@@ -387,13 +387,13 @@ class CodingAgent(BaseUltronAgent):
 
         # ACL permission check for test target path
         if os.path.exists(test_target):
-            self._verify_workspace_acl(test_target, AccessTier.READ)
+            self._verify_workspace_acl(test_target, AccessTier.READ_ONLY)
 
-        # Build safe subprocess command array (NEVER shell=True)
+        # Build safe subprocess command array (NEVER use shell flag)
         if test_runner == "pytest":
             cmd = [os.sys.executable, "-m", "pytest", test_target, "-v", "--tb=short"]
         elif test_runner == "unittest":
-            cmd = [os.sys.executable, "-m", "unittest", test_target]
+            cmd = [os.sys.executable, "-m", "unittest", os.path.basename(test_target)]
         else:
             cmd = [os.sys.executable, test_target]
 
@@ -405,6 +405,7 @@ class CodingAgent(BaseUltronAgent):
                 stderr=subprocess.PIPE,
                 text=True,
                 check=False,
+                cwd=os.path.dirname(test_target),
                 timeout=float(payload.get("timeout_sec", 60.0)),
             )
             elapsed_sec = time.time() - start_t
@@ -519,7 +520,7 @@ class CodingAgent(BaseUltronAgent):
                     if target_file and path != target_file:
                         continue
                     try:
-                        self._verify_workspace_acl(path, AccessTier.WRITE)
+                        self._verify_workspace_acl(path, AccessTier.OWNER)
                         if original:
                             with open(path, "w", encoding="utf-8") as f:
                                 f.write(original)

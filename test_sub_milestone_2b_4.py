@@ -375,7 +375,7 @@ class TestSubMilestone2B4(unittest.TestCase):
             "file_path": unauthorized_path,
         })
         self.assertEqual(res["status"], "ERROR")
-        self.assertIn("PermissionDeniedException", res["error"])
+        self.assertIn("WorkspaceACL blocked", res["error"])
 
     def test_25_shell_security_protection(self) -> None:
         """Scenario 25: Verify safe subprocess argument array execution (no shell=True)."""
@@ -455,16 +455,14 @@ class TestSubMilestone2B4(unittest.TestCase):
             priority=MessagePriority.HIGH,
         )
 
-        received_messages = []
-
-        def handle_msg(a_msg: AgentMessage):
-            received_messages.append(a_msg)
-
-        self.coding_agent.receive_message = handle_msg
-
         self.bus.send_message(msg)
         time.sleep(0.2)
-        self.assertGreaterEqual(len(received_messages), 1)
+        
+        # Pull message from bus via agent's receive_message
+        received_msg = self.coding_agent.receive_message(timeout=0.5)
+        
+        self.assertIsNotNone(received_msg)
+        self.assertEqual(received_msg.payload["action"], "implement_specification")
 
     def test_32_workspace_store_and_acl_cross_agent(self) -> None:
         """Scenario 32: WorkspaceStore data sharing and WorkspaceACL isolation."""
@@ -478,7 +476,7 @@ class TestSubMilestone2B4(unittest.TestCase):
         self.bus.write_workspace("workspace/research/notes", {"findings": "API Spec"}, owner_agent="research_agent")
 
         # Grant CodingAgent read access
-        self.bus.grant_permission("workspace/research/*", "coding_agent", AccessTier.READ)
+        self.bus.grant_permission("workspace/research/*", "coding_agent", AccessTier.READ_ONLY)
 
         # CodingAgent reads data
         data = self.bus.read_workspace("workspace/research/notes", agent_id="coding_agent")

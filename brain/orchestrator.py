@@ -12,7 +12,7 @@ from core.logger import logger
 from core.session import session
 from core.event_bus import event_bus
 from brain.llm_manager import llm_manager
-from brain.smart_parser import detect_action, clean_command
+from brain.smart_parser import detect_action, clean_command, detect_language_intent
 from brain.memory import recall, load_memory
 from brain.smart_memory import extract_memory
 from brain.planner import plan
@@ -153,6 +153,9 @@ class Orchestrator:
         from agents.research_agent import ResearchAgent
         from agents.coding_agent import CodingAgent
 
+        from agents.vision_agent import VisionAgent
+        from agents.browser_agent import BrowserAgent
+
         self.bus = bus or AgentMemoryBus()
         if not getattr(self.bus, "_is_initialized", False):
             try:
@@ -167,13 +170,15 @@ class Orchestrator:
             except Exception as err:
                 logger.debug(f"[Orchestrator] AgentManager initialize notice: {err}")
 
-        # Instantiate & register all 6 domain agents
+        # Instantiate & register all 8 domain agents
         self._system_agent = SystemAgent(bus=self.bus)
         self._memory_agent = MemoryAgent(bus=self.bus)
         self._background_agent = BackgroundTaskAgent(bus=self.bus)
         self._planning_agent = PlanningAgent(bus=self.bus)
         self._research_agent = ResearchAgent(bus=self.bus)
         self._coding_agent = CodingAgent(bus=self.bus)
+        self._vision_agent = VisionAgent(bus=self.bus)
+        self._browser_agent = BrowserAgent(bus=self.bus)
 
         for agent in [
             self._system_agent,
@@ -182,6 +187,8 @@ class Orchestrator:
             self._planning_agent,
             self._research_agent,
             self._coding_agent,
+            self._vision_agent,
+            self._browser_agent,
         ]:
             try:
                 self.agent_manager.register_agent(agent)
@@ -262,17 +269,6 @@ class Orchestrator:
                 bg_id = res.get("result", {}).get("task_id", "")
                 return f"Background task '{bg_id}' submitted successfully Boss."
 
-        # 4B. Language Switch Intent
-        telugu_triggers = ["speak in telugu", "telugu lo matladu", "తెలుగులో మాట్లాడు", "తెలుగులో చెప్పు", "answer in telugu", "can you speak telugu"]
-        english_triggers = ["speak in english", "english lo matladu", "switch to english", "answer in english"]
-        
-        if any(k in cmd or k in orig for k in telugu_triggers):
-            session.preferred_language = "te"
-            return "నేను తెలుగులో మాట్లాడగలను. మీకు ఎలా సహాయపడగలను?"
-        elif any(k in cmd or k in orig for k in english_triggers):
-            session.preferred_language = "en"
-            return "Switched to English mode."
-
         # 5. System & Storage Agent Intent
         storage_triggers = ["d drive", "c drive", "tell about d drive", "tell about c drive", "disk status", "storage status", "d: drive", "c: drive", "my storage", "my disk"]
         if any(k in cmd for k in storage_triggers):
@@ -306,6 +302,133 @@ class Orchestrator:
                 agents_count = len(self.agent_manager.list_agents())
                 return f"All {agents_count} domain agents are healthy and operational."
 
+        # 6. Vision Agent Intent
+        analyze_triggers = [
+            "look at my screen", "what is on my screen", "what's on my screen", 
+            "read my screen", "read the screen", "analyse my screen", "analyze my screen", 
+            "analyse screen", "analyze screen", "analyse the screen", "analyze the screen", 
+            "describe my screen", "describe what is on my screen", "inspect my screen", 
+            "inspect the screen", "check my screen", "check the screen", "analyse this screen", 
+            "analyze this screen", "analyse my display", "analyze my display",
+            "screen meeda em undi"
+        ]
+        camera_triggers = ["camera capture", "take a picture", "capture camera"]
+        screenshot_triggers = ["take a screenshot", "capture screen", "screenshot"]
+        
+        v_action = None
+        if any(k in cmd or k in orig for k in analyze_triggers):
+            v_action = "analyze_screen"
+        elif any(k in cmd or k in orig for k in camera_triggers):
+            v_action = "capture_camera"
+        elif any(k in cmd or k in orig for k in screenshot_triggers):
+            v_action = "capture_screen"
+            
+        if v_action:
+            res = self.agent_manager.dispatch_task("vision_agent", t_id, {
+                "action": v_action,
+            })
+            if res.get("status") == "SUCCESS":
+                inner = res.get("result", {})
+                raw_text = inner.get("result", "") if isinstance(inner, dict) else str(inner)
+                if v_action in ["analyze_screen", "ocr"]:
+                    from brain.llm_manager import llm_manager
+                    prompt = f"Boss asked you to analyze/read their screen. Based on this raw screen data, provide a concise, natural language response describing what's on the screen. Do not mention 'Extracted Screen Content' or OCR garbage. Raw data:\n{raw_text}"
+                    if getattr(session, "preferred_language", "en") == "te":
+                        prompt += "\n\nCRITICAL INSTRUCTION: You MUST reply in natural conversational Telugu script! Explain what is on the screen in Telugu."
+                    summary = llm_manager.ask(prompt)
+                    logger.info("[VisionAgent] User-facing screen summary generated")
+                    return summary
+                return raw_text
+            elif res.get("reason"):
+                return f"Vision notice: {res.get('reason')}"
+
+        # 7. Browser Agent Intent
+        KNOWN_WEBSITES = {
+            "youtube": "https://www.youtube.com",
+            "whatsapp": "https://web.whatsapp.com",
+            "google": "https://www.google.com",
+            "gmail": "https://mail.google.com",
+            "github": "https://github.com",
+            "instagram": "https://www.instagram.com",
+            "facebook": "https://www.facebook.com",
+            "twitter": "https://twitter.com",
+            "x": "https://x.com",
+            "linkedin": "https://www.linkedin.com",
+            "chatgpt": "https://chatgpt.com",
+            "google ai studio": "https://aistudio.google.com",
+        }
+        
+        browser_triggers = [
+            "open ", "go to ", "navigate to ", "visit ", "search for ",
+            "read ", "inspect ", "close "
+        ]
+        browser_suffixes = ["open cheyyi", "close cheyyi", "open chey", "close chey", "open cheyyandi", "close cheyyandi"]
+        
+        is_browser_command = False
+        target_url = orig
+        b_action = "open_url"
+        
+        if cmd.startswith("open http") or ("open" in cmd and any(ext in cmd for ext in [".com", ".org", ".net", ".io"])):
+            is_browser_command = True
+        elif any(orig.startswith(k) for k in browser_triggers) or any(orig.endswith(s) for s in browser_suffixes):
+            # Strip prefixes
+            for strip_term in browser_triggers:
+                if target_url.startswith(strip_term):
+                    target_url = target_url[len(strip_term):].strip()
+                    break
+            # Strip suffixes for mixed Telugu
+            for strip_suffix in browser_suffixes:
+                if target_url.endswith(strip_suffix):
+                    target_url = target_url[:-len(strip_suffix)].strip()
+                    break
+            
+            if target_url in KNOWN_WEBSITES:
+                is_browser_command = True
+                target_url = KNOWN_WEBSITES[target_url]
+            elif target_url in ["browser", "tab", "page", "website"]:
+                is_browser_command = True
+                target_url = "" # Action applies to current browser
+            elif "." in target_url and not " " in target_url:
+                is_browser_command = True
+                target_url = "https://" + target_url if not target_url.startswith("http") else target_url
+            elif "search for " in orig:
+                is_browser_command = True
+                query = orig.split("search for ")[-1].strip().replace(" ", "+")
+                target_url = f"https://www.google.com/search?q={query}"
+        
+        if is_browser_command:
+            logger.info("[Orchestrator] Browser intent detected")
+            if "close" in orig:
+                logger.info("[Orchestrator] Browser close intent detected")
+                b_action = "close_browser"
+            elif "read " in orig or "inspect " in orig:
+                b_action = "inspect_page"
+                
+            res = self.agent_manager.dispatch_task("browser_agent", t_id, {
+                "action": b_action,
+                "url": target_url or "https://example.com",
+            })
+            
+            if res.get("status") == "SUCCESS":
+                inner = res.get("result", {})
+                
+                # Check actual inner status returned by BrowserAgent
+                inner_status = inner.get("status")
+                res_msg = inner.get("result", "") if isinstance(inner, dict) else str(inner)
+                reason = inner.get("reason", "") if isinstance(inner, dict) else ""
+                
+                if inner_status == "ERROR":
+                    return f"I couldn't complete the browser action because {reason}"
+                    
+                if b_action == "open_url":
+                    logger.info("[BrowserAgent] Navigation successful")
+                    return f"{inner.get('title', target_url)} is open, Boss."
+                elif b_action == "close_browser":
+                    return "The browser has been closed."
+                return res_msg
+            elif res.get("reason"):
+                return f"Browser notice: {res.get('reason')}"
+
         return None
 
     def process_command(self, original_command: str) -> str:
@@ -323,7 +446,45 @@ class Orchestrator:
             return "Waiting Boss"
 
         logger.info(f"Processing Command: '{original}' (cleaned: '{command}')")
+        
+        # Determine language context for this command
+        input_lang, explicit_switch = detect_language_intent(original)
+        if explicit_switch:
+            session.preferred_language = explicit_switch
+            event_bus.publish(event_bus.TASK_STARTED, command=original)
+            res = "సరే బాస్. ఇక నుంచి తెలుగులో మాట్లాడతాను." if explicit_switch == "te" else "Sure, Boss. I'll speak in English from now on."
+            event_bus.publish(event_bus.TASK_FINISHED, command=original)
+            return res
+
+        current_lang = getattr(session, "preferred_language", "en") if not explicit_switch else explicit_switch
+        
         event_bus.publish(event_bus.TASK_STARTED, command=original)
+
+        def _format_local_response(english_response: str) -> str:
+            """Translates deterministic outputs to Telugu internally."""
+            if current_lang != "te":
+                return english_response
+            # Local mapping for fast Telugu responses without LLM latency
+            mapping = {
+                "YouTube is open, Boss.": "YouTube ఓపెన్ చేశాను, Boss.",
+                "WhatsApp Web is open, Boss.": "WhatsApp ఓపెన్ చేశాను, Boss.",
+                "The browser has been closed.": "Browser క్లోజ్ చేశాను, Boss.",
+                "Switched to English mode.": "Sure Boss, I will speak in English.",
+                "Voice Verified Boss. Session authenticated.": "మీ వాయిస్ వెరిఫై అయింది బాస్.",
+                "Goodbye Boss. Shutting down ULTRON.": "గుడ్ బై బాస్. సిస్టమ్ ఆఫ్ చేస్తున్నాను.",
+                "Locking your PC": "మీ PC లాక్ చేస్తున్నాను బాస్.",
+                "Restarting your PC": "మీ PC రీస్టార్ట్ చేస్తున్నాను బాస్."
+            }
+            for eng, te_str in mapping.items():
+                if eng in english_response:
+                    return english_response.replace(eng, te_str)
+            if "is open, Boss." in english_response:
+                return english_response.replace("is open, Boss.", "ఓపెన్ చేశాను, Boss.")
+            if "Opening" in english_response:
+                return english_response.replace("Opening", "ఓపెన్ చేస్తున్నాను")
+            if "Closing" in english_response:
+                return english_response.replace("Closing", "క్లోజ్ చేస్తున్నాను")
+            return english_response
 
         # 0. PERMANENTLY UNSUPPORTED DESTRUCTIVE COMMANDS SECURITY BLOCK
         # Factory Reset, Format Drive, and Delete All Files are permanently unsupported for security.
@@ -517,7 +678,7 @@ class Orchestrator:
         agent_res = self._dispatch_to_domain_agent(command, original)
         if agent_res is not None:
             event_bus.publish(event_bus.TASK_FINISHED, command=original)
-            return agent_res
+            return _format_local_response(agent_res)
 
         # 1. SMART MEMORY EXTRACTION
         memory_result = extract_memory(original)
@@ -683,21 +844,17 @@ class Orchestrator:
             search_item(query)
             return f"Searching for {query}"
 
-        if "open youtube" in command:
-            webbrowser.open("https://youtube.com")
-            return "Opening YouTube"
-
-        if "open google" in command:
-            webbrowser.open("https://google.com")
-            return "Opening Google"
-
         # 9. BASIC CHAT RESPONSES
         basic_chat = self._chat_response(command)
         if basic_chat is not None:
-            return basic_chat
+            return _format_local_response(basic_chat)
 
-        # 10. UNIFIED LLM MANAGER FALLBACK
-        result = llm_manager.ask(command)
+        # 10. LANGUAGE DETECTION & LLM FALLBACK
+        llm_prompt = command
+        if current_lang == "te":
+            llm_prompt = "User is speaking Telugu (or transliterated Tanglish). You MUST reply in natural conversational Telugu script. Understand transliterated Tanglish semantically. Do not perform word-for-word transliteration. Do not invent meanings. User query: " + command
+            
+        result = llm_manager.ask(llm_prompt)
         event_bus.publish(event_bus.TASK_FINISHED, command=command)
         return result
 

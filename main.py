@@ -63,7 +63,8 @@ def start_ultron() -> None:
                     result = orchestrator.process_command(command_str)
                     logger.info(f"{config.ASSISTANT_NAME}: {result}")
                     if not session.session_data.pop("_already_spoken", False):
-                        speak(result)
+                        import threading
+                        threading.Thread(target=speak, args=(result,), daemon=True).start()
                     time.sleep(0.2)
 
             except KeyboardInterrupt:

@@ -148,6 +148,11 @@ class BaseUltronAgent(BaseAgent, IService, ABC):
                 "metrics": dict(self._metrics),
             }
 
+    def get_metrics(self) -> Dict[str, Any]:
+        """Return agent runtime metrics."""
+        with self._lock:
+            return dict(self._metrics)
+
     def configure(self, config_data: Dict[str, Any]) -> None:
         """Apply configuration parameters to agent."""
         with self._lock:

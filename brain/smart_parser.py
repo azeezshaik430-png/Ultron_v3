@@ -19,7 +19,7 @@ def clean_command(command):
         "format drive", "format disk", "format c drive", "format d drive",
         "delete all files", "delete files", "delete everything", "erase all files",
         "confirm reset", "confirm format", "confirm delete",
-        "yes boss", "never mind"
+        "yes boss", "never mind", "telugu lo cheppu"
     ]
 
     for phrase in protected_phrases:
@@ -30,7 +30,11 @@ def clean_command(command):
         "please",
         "can you",
         "could you",
-        "my"
+        "my",
+        "naaku",
+        "kavali",
+        "cheyyi",
+        "chey"
     ]
 
     for word in remove_words:
@@ -44,43 +48,61 @@ def clean_command(command):
     return result if result else command
 
 
+def detect_language_intent(command: str):
+    """
+    Returns (input_lang, explicit_switch)
+    input_lang: 'en' or 'te'
+    explicit_switch: 'en' or 'te' if user explicitly asks to switch, else None
+    """
+    command = command.lower().strip()
+    
+    # Check explicit switch requests
+    if any(x in command for x in ["speak english", "change your language to english", "switch to english", "english lo cheppu"]):
+        return ("en", "en")
+    
+    if any(x in command for x in ["speak telugu", "change your language to telugu", "switch to telugu", "telugu lo cheppu", "telugu lo matladu"]):
+        return ("te", "te")
+
+    # Explicit English markers
+    english_keywords = ["what is", "how are", "open", "close", "who is", "where is", "why", "when"]
+    
+    # Tanglish/Telugu heuristics
+    telugu_keywords = [
+        "nuvvu", "nenu", "ela", "unnav", "cheppu", "cheyyi", "undi", 
+        "kavali", "vaddu", "avunu", "kadhu", "bagundi", "bagoledhu", 
+        "cheppandi", "chey", "ekkada", "eppudu", "enduku", "emiti", 
+        "entandi", "evaru", "meeku", "naaku", "vallu", "peru", "enti",
+        "matladagalava", "ivvu", "chusi", "meeda", "lo"
+    ]
+    
+    words = command.split()
+    te_score = sum(1 for w in words if w in telugu_keywords)
+    en_score = sum(1 for w in words if w in english_keywords)
+    
+    # "youtube open cheyyi" -> Mixed command, Tanglish dominant context
+    if te_score > 0:
+        return ("te", None)
+        
+    return ("en", None)
+
 
 def detect_action(command):
-
     command = clean_command(command)
 
-
-
     # OPEN
-
-    if "open" in command or "start" in command or "launch" in command:
-
+    if "open" in command or "start" in command or "launch" in command or "teru" in command:
         return "OPEN"
 
-
-
     # CLOSE
-
-    if "close" in command or "exit" in command:
-
+    if "close" in command or "exit" in command or "muyyi" in command or "museti" in command:
         return "CLOSE"
 
-
-
     # SLEEP
-
-    if "sleep" in command:
-
+    if "sleep" in command or "nidra" in command:
         return "SLEEP"
 
-
-
     # STOP
-
-    if "stop" in command or "shutdown" in command:
-
+    if "stop" in command or "shutdown" in command or "aapu" in command:
         return "STOP"
-
-
 
     return "UNKNOWN"
