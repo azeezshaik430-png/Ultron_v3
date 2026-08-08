@@ -38,9 +38,11 @@ class TestSubMilestone2B4(unittest.TestCase):
         self.manager = AgentManager(bus=self.bus)
         self.manager.initialize()
 
-        # Instantiate agents
+        # Instantiate & initialize agents
         self.research_agent = ResearchAgent(bus=self.bus)
+        self.research_agent.initialize()
         self.coding_agent = CodingAgent(bus=self.bus)
+        self.coding_agent.initialize()
 
     def tearDown(self) -> None:
         try:
@@ -82,11 +84,12 @@ class TestSubMilestone2B4(unittest.TestCase):
 
     def test_03_research_agent_lifecycle(self) -> None:
         """Scenario 3: Lifecycle transitions of ResearchAgent (OFFLINE -> INITIALIZING -> ONLINE -> OFFLINE)."""
-        self.assertEqual(self.research_agent.status, AgentStatus.OFFLINE)
-        self.research_agent.initialize()
-        self.assertEqual(self.research_agent.status, AgentStatus.ONLINE)
-        self.research_agent.shutdown()
-        self.assertEqual(self.research_agent.status, AgentStatus.OFFLINE)
+        agent = ResearchAgent(bus=self.bus)
+        self.assertEqual(agent.status, AgentStatus.OFFLINE)
+        agent.initialize()
+        self.assertEqual(agent.status, AgentStatus.ONLINE)
+        agent.shutdown()
+        self.assertEqual(agent.status, AgentStatus.OFFLINE)
 
     def test_04_research_task_creation(self) -> None:
         """Scenario 4: Research task creation and WorkspaceStore persistence."""
@@ -242,11 +245,12 @@ class TestSubMilestone2B4(unittest.TestCase):
 
     def test_16_coding_agent_lifecycle(self) -> None:
         """Scenario 16: Lifecycle transitions of CodingAgent."""
-        self.assertEqual(self.coding_agent.status, AgentStatus.OFFLINE)
-        self.coding_agent.initialize()
-        self.assertEqual(self.coding_agent.status, AgentStatus.ONLINE)
-        self.coding_agent.shutdown()
-        self.assertEqual(self.coding_agent.status, AgentStatus.OFFLINE)
+        agent = CodingAgent(bus=self.bus)
+        self.assertEqual(agent.status, AgentStatus.OFFLINE)
+        agent.initialize()
+        self.assertEqual(agent.status, AgentStatus.ONLINE)
+        agent.shutdown()
+        self.assertEqual(agent.status, AgentStatus.OFFLINE)
 
     def test_17_repository_inspection(self) -> None:
         """Scenario 17: Repository structure inspection."""
@@ -471,13 +475,13 @@ class TestSubMilestone2B4(unittest.TestCase):
         self.bus.grant_permission("workspace/research/*", "research_agent", AccessTier.OWNER)
 
         # Write data
-        self.bus.store_workspace_data("workspace/research/notes", {"findings": "API Spec"}, "research_agent")
+        self.bus.write_workspace("workspace/research/notes", {"findings": "API Spec"}, owner_agent="research_agent")
 
         # Grant CodingAgent read access
         self.bus.grant_permission("workspace/research/*", "coding_agent", AccessTier.READ)
 
         # CodingAgent reads data
-        data = self.bus.get_workspace_data("workspace/research/notes", "coding_agent")
+        data = self.bus.read_workspace("workspace/research/notes", agent_id="coding_agent")
         self.assertEqual(data["findings"], "API Spec")
 
     def test_33_orchestrator_dispatch_and_graceful_shutdown(self) -> None:

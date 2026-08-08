@@ -209,10 +209,10 @@ class ResearchAgent(BaseUltronAgent):
             self._research_tasks[r_id] = task
 
         # Persist task state in WorkspaceStore if bus available
-        if self.bus and hasattr(self.bus, "store_workspace_data"):
+        if self.bus and hasattr(self.bus, "write_workspace"):
             try:
                 path = f"workspace/{self.agent_id}/tasks/{r_id}"
-                self.bus.store_workspace_data(path, task.to_dict(), self.agent_id)
+                self.bus.write_workspace(path, task.to_dict(), owner_agent=self.agent_id)
             except Exception as err:
                 logger.debug(f"[{self.name}] WorkspaceStore persist notice: {err}")
 
