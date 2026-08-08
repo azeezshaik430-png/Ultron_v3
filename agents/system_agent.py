@@ -134,7 +134,7 @@ class SystemAgent(BaseUltronAgent):
         elif action in ["get_battery", "battery"]:
             return system_control.get_battery()
 
-        elif action in ["system_status", "status", "system_info"]:
+        elif action in ["system_status", "status", "system_info", "get_system_status"]:
             return system_control.system_status()
 
         # --- FILE OPERATIONS ---

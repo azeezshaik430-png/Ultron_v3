@@ -265,7 +265,7 @@ class Orchestrator:
         # 5. System Agent Intent
         if "agent status" in cmd or "check agent health" in cmd or "system diagnostics" in cmd:
             res = self.agent_manager.dispatch_task("system_agent", t_id, {
-                "action": "get_system_status",
+                "action": "system_status",
             })
             if res.get("status") == "SUCCESS":
                 agents_count = len(self.agent_manager.list_agents())
