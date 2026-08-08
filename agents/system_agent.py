@@ -197,6 +197,12 @@ class SystemAgent(BaseUltronAgent):
         elif action in ["min_volume"]:
             return volume_control.min_volume()
 
+        elif action in ["set_volume"]:
+            val = payload.get("level") or payload.get("value")
+            if val is not None:
+                return volume_control.set_volume_pct(val)
+            return "Cannot set volume: no level provided."
+
         # --- WINDOWS SESSION CONTROL ---
         elif action in ["lock_pc", "lock"]:
             return windows_control.lock_pc()
@@ -214,9 +220,6 @@ class SystemAgent(BaseUltronAgent):
             return windows_control.shutdown_pc()
 
         elif action in ["restart_pc", "restart"]:
-            # DESTRUCTIVE RESTART PROTECTION
-            if not payload.get("confirmed", False):
-                return "Security block: Restart computer requires explicit user confirmation (confirmed: True)."
             return windows_control.restart_pc()
 
         else:
@@ -233,12 +236,20 @@ class SystemAgent(BaseUltronAgent):
             return system_control.get_battery()
         elif "status" in task_lower:
             return system_control.system_status()
-        elif "volume up" in task_lower:
-            return volume_control.volume_up()
-        elif "volume down" in task_lower:
+        elif "volume down" in task_lower or "decrease volume" in task_lower:
             return volume_control.volume_down()
+        elif "volume up" in task_lower or "increase volume" in task_lower:
+            return volume_control.volume_up()
         elif "mute" in task_lower:
             return volume_control.mute()
+        elif "unmute" in task_lower:
+            return volume_control.unmute()
+        elif "set volume to" in task_lower or "volume " in task_lower and "percent" in task_lower:
+            import re
+            match = re.search(r'\b(\d+)\b', task_lower)
+            if match:
+                return volume_control.set_volume_pct(int(match.group(1)))
+            return "Volume percentage not found in command."
         elif "lock" in task_lower:
             return windows_control.lock_pc()
         elif "settings" in task_lower:

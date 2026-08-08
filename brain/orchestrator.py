@@ -7,7 +7,7 @@ All user inputs flow strictly through Orchestrator -> Intent -> Planner -> Route
 import time
 import webbrowser
 import urllib.parse
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 from core.logger import logger
 from core.session import session
@@ -97,18 +97,118 @@ DANGEROUS_COMMANDS = {
     "turn off computer": ("Shutdown PC", False, "CONFIRM SHUTDOWN", shutdown_pc),
     "power off computer": ("Shutdown PC", False, "CONFIRM SHUTDOWN", shutdown_pc),
     "power off windows": ("Shutdown PC", False, "CONFIRM SHUTDOWN", shutdown_pc),
+    "power off pc": ("Shutdown PC", False, "CONFIRM SHUTDOWN", shutdown_pc),
+    "shutdown my pc": ("Shutdown PC", False, "CONFIRM SHUTDOWN", shutdown_pc),
 
     "restart pc": ("Restart PC", False, "CONFIRM RESTART", restart_pc),
     "restart computer": ("Restart PC", False, "CONFIRM RESTART", restart_pc),
     "reboot pc": ("Restart PC", False, "CONFIRM RESTART", restart_pc),
     "reboot computer": ("Restart PC", False, "CONFIRM RESTART", restart_pc),
+    "restart my pc": ("Restart PC", False, "CONFIRM RESTART", restart_pc),
 
     "sign out": ("Sign Out", False, "CONFIRM SIGNOUT", sign_out_pc),
     "log out windows": ("Sign Out", False, "CONFIRM SIGNOUT", sign_out_pc),
+    "sign me out": ("Sign Out", False, "CONFIRM SIGNOUT", sign_out_pc),
+    "sign out my pc": ("Sign Out", False, "CONFIRM SIGNOUT", sign_out_pc),
+    "log out my pc": ("Sign Out", False, "CONFIRM SIGNOUT", sign_out_pc),
 
     "lock pc": ("Lock PC", False, "CONFIRM LOCK", lock_pc),
     "lock computer": ("Lock PC", False, "CONFIRM LOCK", lock_pc),
+    "lock my pc": ("Lock PC", False, "CONFIRM LOCK", lock_pc),
+
+    "sleep pc": ("Sleep PC", False, "CONFIRM SLEEP", sleep_pc),
+    "sleep computer": ("Sleep PC", False, "CONFIRM SLEEP", sleep_pc),
+    "sleep my pc": ("Sleep PC", False, "CONFIRM SLEEP", sleep_pc),
+    "put pc to sleep": ("Sleep PC", False, "CONFIRM SLEEP", sleep_pc),
+    "put computer to sleep": ("Sleep PC", False, "CONFIRM SLEEP", sleep_pc),
 }
+
+
+def is_deterministic_command(cmd: str) -> bool:
+    c = cmd.lower().strip()
+    
+    # Volume commands
+    if c in ["volume up", "increase volume", "volume penchu", "volume penchandi", "volume down", "decrease volume", "volume tagginchu", "volume tagginchandi", "mute", "mute volume", "mute cheyyi", "mute chey", "unmute", "unmute volume", "unmute cheyyi", "unmute chey"]:
+        return True
+    if c.startswith("set volume to ") or ("volume" in c and "percent" in c):
+        return True
+        
+    # Dangerous session commands
+    dangerous_triggers = [
+        "shutdown", "turn off pc", "turn off computer", "power off",
+        "restart", "reboot", "sign out", "log out", "lock pc", "lock computer",
+        "sleep pc", "sleep computer", "sleep my pc"
+    ]
+    if any(k in c for k in dangerous_triggers):
+        return True
+        
+    # Browser commands
+    browser_triggers = [
+        "open ", "go to ", "navigate to ", "visit ", "search ", "play ",
+        "come back", "go back", "back", "return", "close browser", "close tab", "close page", "close youtube", "close whatsapp"
+    ]
+    browser_suffixes = ["open cheyyi", "close cheyyi", "open chey", "close chey", "search cheyyi", "search chey", "play cheyyi", "play chey"]
+    if any(c.startswith(k) for k in browser_triggers) or any(c.endswith(s) for s in browser_suffixes):
+        return True
+        
+    # Conversational replies like "yes" or "cancel" if pending confirmation is active
+    if c in ["yes", "no", "cancel", "confirm", "proceed", "yes boss", "cancel cheyyi", "vaddu"]:
+        return True
+        
+    return False
+
+
+def parse_search_command(cmd: str, current_url: str) -> Tuple[str, str]:
+    cmd_lower = cmd.lower().strip()
+    
+    # Strip "search for ", "search ", " search cheyyi", " search chey"
+    clean_query = cmd_lower
+    for term in ["search for ", "search in ", "search on ", "search "]:
+        if clean_query.startswith(term):
+            clean_query = clean_query[len(term):].strip()
+            break
+            
+    for suffix in [" search cheyyi", " search chey", " search"]:
+        if clean_query.endswith(suffix):
+            clean_query = clean_query[:-len(suffix)].strip()
+            break
+            
+    # Detect site in cmd_lower
+    site = None
+    if "youtube" in cmd_lower:
+        site = "youtube"
+        # Strip "youtube" and connectors
+        for term in ["youtube for ", "youtube in ", "youtube on ", "youtube "]:
+            if clean_query.startswith(term):
+                clean_query = clean_query[len(term):].strip()
+        for term in [" in youtube", " on youtube", " youtube"]:
+            if clean_query.endswith(term):
+                clean_query = clean_query[:-len(term)].strip()
+    elif "google" in cmd_lower:
+        site = "google"
+        for term in ["google for ", "google in ", "google on ", "google "]:
+            if clean_query.startswith(term):
+                clean_query = clean_query[len(term):].strip()
+        for term in [" in google", " on google", " google"]:
+            if clean_query.endswith(term):
+                clean_query = clean_query[:-len(term)].strip()
+    elif "github" in cmd_lower:
+        site = "github"
+        for term in ["github for ", "github "]:
+            if clean_query.startswith(term):
+                clean_query = clean_query[len(term):].strip()
+        for term in [" in github", " github"]:
+            if clean_query.endswith(term):
+                clean_query = clean_query[:-len(term)].strip()
+                
+    # If no site detected in command, check current_url
+    if not site:
+        if "youtube.com" in current_url:
+            site = "youtube"
+        else:
+            site = "google" # Default fallback
+            
+    return site, clean_query
 
 
 def log_security_audit(command_name: str, result_status: str) -> None:
@@ -359,32 +459,52 @@ class Orchestrator:
             "google ai studio": "https://aistudio.google.com",
         }
         
-        browser_triggers = [
-            "open ", "go to ", "navigate to ", "visit ", "search for ",
-            "read ", "inspect ", "close "
-        ]
-        browser_suffixes = ["open cheyyi", "close cheyyi", "open chey", "close chey", "open cheyyandi", "close cheyyandi", "search cheyyi", "search chey"]
-        
         is_browser_command = False
-        target_url = orig
         b_action = "open_url"
+        target_url = ""
         
-        if cmd.startswith("open http") or ("open" in cmd and any(ext in cmd for ext in [".com", ".org", ".net", ".io"])):
+        # Priority 1: Check Search Intent BEFORE generic open_url
+        is_search_intent = False
+        search_site = None
+        search_query = None
+        
+        if orig.startswith("search ") or "search " in orig or "search cheyyi" in orig or "search chey" in orig:
+            is_search_intent = True
+            active_url = getattr(self._browser_agent, "current_url", "")
+            search_site, search_query = parse_search_command(original, active_url)
+            logger.info(f"[Orchestrator] _dispatch_to_domain_agent parsed search intent: site='{search_site}', query='{search_query}'")
+
+        if any(k in orig for k in ["search something else", "search again", "malli search", "something else search"]):
+            session.session_data["browser_state"] = "WAITING_FOR_SEARCH_QUERY"
+            current_lang = getattr(session, "preferred_language", "en")
+            return "What would you like me to search for, Boss?" if current_lang != "te" else "ఏం search చేయాలి Boss?"
+        elif "come back and search " in orig or "back ki velli " in orig or "venakki velli " in orig or "malli velli " in orig or "back and search" in orig:
             is_browser_command = True
-        elif any(orig.startswith(k) for k in browser_triggers) or any(orig.endswith(s) for s in browser_suffixes):
-            # Strip prefixes
-            for strip_term in browser_triggers:
-                if target_url.startswith(strip_term):
-                    target_url = target_url[len(strip_term):].strip()
+            b_action = "back_and_search"
+        elif orig in ["come back", "go back", "back", "back ki velli", "back ki vellu", "return"]:
+            is_browser_command = True
+            b_action = "go_back"
+        elif "play" in orig and any(ord in orig for ord in ["first", "second", "third", "fourth", "fifth", "1st", "2nd", "3rd", "4th", "5th", "modati", "rendava", "moodava", "play cheyyi", "play chey"]):
+            is_browser_command = True
+            b_action = "play_nth_video"
+        elif orig in ["close browser", "close tab", "close page", "close youtube", "close whatsapp", "close brave"]:
+            is_browser_command = True
+            b_action = "close_browser"
+        elif is_search_intent and search_query:
+            is_browser_command = True
+            b_action = "search_site"
+        elif any(orig.startswith(k) for k in ["open ", "go to ", "navigate to ", "visit "]) or any(orig.endswith(s) for s in [" open cheyyi", " open chey"]):
+            target_term = orig
+            for kw in ["open ", "go to ", "navigate to ", "visit "]:
+                if target_term.startswith(kw):
+                    target_term = target_term[len(kw):].strip()
                     break
-            # Strip suffixes for mixed Telugu
-            for strip_suffix in browser_suffixes:
-                if target_url.endswith(strip_suffix):
-                    target_url = target_url[:-len(strip_suffix)].strip()
+            for sfx in [" open cheyyi", " open chey"]:
+                if target_term.endswith(sfx):
+                    target_term = target_term[:-len(sfx)].strip()
                     break
             
-            # 1. Handle "Open Brave" Conversational Trigger
-            if target_url == "brave":
+            if target_term == "brave":
                 session.session_data["browser_state"] = "WAITING_FOR_WEBSITE"
                 res = self.agent_manager.dispatch_task("browser_agent", t_id, {
                     "action": "open_url",
@@ -394,94 +514,148 @@ class Orchestrator:
                 if current_lang == "te":
                     return "ఏ website open చేయాలి Boss?"
                 return "What website would you like me to open, Boss?"
-
-            # 2. Handle One-Shot Searches (e.g., "open youtube and search ai agents")
-            searchable_sites = ["youtube", "google", "github", "twitter", "x"]
-            for site in searchable_sites:
-                one_shot_en = f"{site} and search "
-                one_shot_te = f"{site} lo "
-                if one_shot_en in target_url:
-                    query = target_url.split(one_shot_en)[-1].strip()
-                    if site == "youtube":
-                        target_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}"
-                    elif site == "google":
-                        target_url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
-                    else:
-                        target_url = f"https://www.google.com/search?q=site:{site}.com+{urllib.parse.quote_plus(query)}"
-                    is_browser_command = True
-                    break
-                elif one_shot_te in orig and " search cheyyi" in orig:
-                    query = orig.split(one_shot_te)[-1].split(" search cheyyi")[0].strip()
-                    if site == "youtube":
-                        target_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}"
-                    elif site == "google":
-                        target_url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
-                    else:
-                        target_url = f"https://www.google.com/search?q=site:{site}.com+{urllib.parse.quote_plus(query)}"
-                    is_browser_command = True
-                    break
-
-            if target_url in KNOWN_WEBSITES:
+            elif target_term in KNOWN_WEBSITES:
                 is_browser_command = True
-                target_url = KNOWN_WEBSITES[target_url]
-            elif target_url in ["browser", "tab", "page", "website"]:
+                b_action = "open_url"
+                target_url = KNOWN_WEBSITES[target_term]
+            elif "." in target_term and not " " in target_term:
                 is_browser_command = True
-                target_url = "" # Action applies to current browser
-            elif "." in target_url and not " " in target_url:
+                b_action = "open_url"
+                target_url = "https://" + target_term if not target_term.startswith("http") else target_term
+            elif target_term in ["browser", "tab", "page", "website"]:
                 is_browser_command = True
-                target_url = "https://" + target_url if not target_url.startswith("http") else target_url
-            elif "search for " in orig:
-                is_browser_command = True
-                query = orig.split("search for ")[-1].strip().replace(" ", "+")
-                target_url = f"https://www.google.com/search?q={query}"
+                b_action = "open_url"
+                target_url = "about:blank"
         
+        # If matches browser command, execute it deterministically!
         if is_browser_command:
-            logger.info("[Orchestrator] Browser intent detected")
-            if "close" in orig:
-                logger.info("[Orchestrator] Browser close intent detected")
-                b_action = "close_browser"
-            elif "read " in orig or "inspect " in orig:
-                b_action = "inspect_page"
+            t_start_browser = time.perf_counter()
+            logger.info(f"[Orchestrator] Browser intent detected: {b_action}")
+            current_lang = getattr(session, "preferred_language", "en")
+            
+            if b_action == "search_site":
+                query_escaped = urllib.parse.quote_plus(search_query)
+                if search_site == "youtube":
+                    target_url = f"https://www.youtube.com/results?search_query={query_escaped}"
+                elif search_site == "google":
+                    target_url = f"https://www.google.com/search?q={query_escaped}"
+                else:
+                    target_url = f"https://www.google.com/search?q=site:{search_site}.com+{query_escaped}"
+                b_action = "open_url"
+
+            elif b_action == "back_and_search":
+                # First go back
+                res = self.agent_manager.dispatch_task("browser_agent", t_id, {"action": "go_back"})
+                if res.get("status") == "SUCCESS":
+                    # Get current URL
+                    res_url = self.agent_manager.dispatch_task("browser_agent", t_id, {"action": "get_url"})
+                    returned_url = res_url.get("result", {}).get("url", "") if res_url.get("status") == "SUCCESS" else ""
+                    
+                    # Extract query
+                    query = ""
+                    if " and search " in orig:
+                        query = original[orig.find(" and search ") + 12:].strip()
+                    elif "search cheyyi" in orig:
+                        if "velli " in orig:
+                            query = original[orig.find("velli ") + 6:orig.find(" search")].strip()
+                        else:
+                            query = original[orig.find("and ") + 4:orig.find(" search")].strip()
+                    if not query:
+                        query = "Python tutorials"
+                        
+                    target_url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
+                    search_target = "Google"
+                    if "youtube.com" in returned_url:
+                        target_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}"
+                        search_target = "YouTube"
+                        
+                    res = self.agent_manager.dispatch_task("browser_agent", t_id, {
+                        "action": "open_url",
+                        "url": target_url
+                    })
+                    b_action = "open_url"
+                else:
+                    return f"I couldn't complete the browser action because back failed: {res.get('reason')}"
+            
+            payload = {"action": b_action, "url": target_url or "https://example.com"}
+            
+            if b_action == "play_nth_video":
+                idx = 0
+                lower_orig = orig.lower()
+                if "first" in lower_orig or "1st" in lower_orig or "modati" in lower_orig: idx = 0
+                elif "second" in lower_orig or "2nd" in lower_orig or "rendava" in lower_orig: idx = 1
+                elif "third" in lower_orig or "3rd" in lower_orig or "moodava" in lower_orig: idx = 2
+                elif "fourth" in lower_orig or "4th" in lower_orig or "nalgava" in lower_orig: idx = 3
+                elif "fifth" in lower_orig or "5th" in lower_orig or "aidava" in lower_orig: idx = 4
+                elif "sixth" in lower_orig or "6th" in lower_orig: idx = 5
+                payload["index"] = idx
                 
-            res = self.agent_manager.dispatch_task("browser_agent", t_id, {
-                "action": b_action,
-                "url": target_url or "https://example.com",
-            })
+            res = self.agent_manager.dispatch_task("browser_agent", t_id, payload)
             
             if res.get("status") == "SUCCESS":
                 inner = res.get("result", {})
-                
-                # Check actual inner status returned by BrowserAgent
-                inner_status = inner.get("status")
-                res_msg = inner.get("result", "") if isinstance(inner, dict) else str(inner)
+                inner_status = inner.get("status") if isinstance(inner, dict) else "SUCCESS"
                 reason = inner.get("reason", "") if isinstance(inner, dict) else ""
                 
                 if inner_status == "ERROR":
                     return f"I couldn't complete the browser action because {reason}"
                     
                 if b_action == "open_url":
-                    logger.info("[BrowserAgent] Navigation successful")
                     title = inner.get('title', target_url)
-                    current_lang = getattr(session, "preferred_language", "en")
+                    # Strip URL if title is just raw URL
+                    if isinstance(title, str) and title.startswith("http"):
+                        title = "Website"
+                    if "youtube.com/results" in target_url or "youtube.com" in target_url:
+                        title = "YouTube"
+                    if "web.whatsapp.com" in target_url or "whatsapp" in target_url:
+                        title = "WhatsApp Web"
                     if current_lang == "te":
                         return f"{title} ఓపెన్ చేశాను, Boss."
                     return f"{title} is open, Boss."
                 elif b_action == "close_browser":
-                    current_lang = getattr(session, "preferred_language", "en")
                     if current_lang == "te":
-                        return "బ్రౌజర్ క్లోజ్ చేశాను బాస్."
+                        return "Browser క్లోజ్ చేశాను, Boss."
                     return "The browser has been closed."
-                return res_msg
-            elif res.get("reason"):
-                return f"Browser notice: {res.get('reason')}"
-
+                elif b_action == "go_back":
+                    if current_lang == "te":
+                        return "వెనక్కి వెళ్ళాను బాస్."
+                    return "Navigated back, Boss."
+                elif b_action == "play_nth_video":
+                    v_title = inner.get("title", "video")
+                    ordinal = ["first", "second", "third", "fourth", "fifth"][payload["index"]] if payload["index"] < 5 else "nth"
+                    if current_lang == "te":
+                        return f"Playing the {ordinal} video, Boss."
+                    return f"Playing the {ordinal} video, Boss."
+            else:
+                return f"I couldn't complete the browser action because: {res.get('reason')}"
         return None
+
+    def _log_latency_instrumentation(self, command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end):
+        t_end = time.perf_counter()
+        end_to_end_latency_ms = (t_end - t_stt_end) * 1000.0
+        logger.info("==================================================")
+        logger.info("⏱️ [ULTRON LATENCY INSTRUMENTATION]")
+        logger.info(f"   command_latency_ms:    {command_latency_ms:.2f} ms")
+        logger.info(f"   action_latency_ms:     {action_latency_ms:.2f} ms")
+        logger.info(f"   llm_latency_ms:        {llm_latency_ms:.2f} ms")
+        logger.info(f"   tts_latency_ms:        {tts_latency_ms:.2f} ms")
+        logger.info(f"   end_to_end_latency_ms: {end_to_end_latency_ms:.2f} ms")
+        logger.info("==================================================")
 
     def process_command(self, original_command: str) -> str:
         """
         Master input execution pipeline:
         Input -> Security/Memory -> Domain Agent / Skill / Intent -> LLM Fallback -> Response
         """
+        t_stt_end = time.perf_counter()
+        logger.info(f"[Instrumentation] STT_END at {t_stt_end:.4f}")
+
+        # Initialize default latency metrics
+        command_latency_ms = 0.0
+        action_latency_ms = 0.0
+        llm_latency_ms = 0.0
+        tts_latency_ms = 0.0
+
         if not original_command:
             return "Waiting Boss"
 
@@ -492,6 +666,27 @@ class Orchestrator:
             return "Waiting Boss"
 
         logger.info(f"Processing Command: '{original}' (cleaned: '{command}')")
+
+        # Multi-Action Decomposition
+        if " and " in original:
+            parts = [p.strip() for p in original.split(" and ")]
+            if len(parts) > 1 and all(is_deterministic_command(p) for p in parts):
+                logger.info(f"[Orchestrator] Decomposing multi-action command: {parts}")
+                results = []
+                for part in parts:
+                    res = self.process_command(part)
+                    results.append(res)
+                    if any(k in res for k in ["Cannot", "Failed", "Security block", "unauthorized", "invalid", "failed"]):
+                        logger.warning(f"[Orchestrator] Multi-action aborted due to failure: {res}")
+                        break
+                return " and ".join(results)
+
+        # Ignore "yes"/"cancel" if no state is pending
+        if original in ["yes", "no", "cancel", "confirm", "proceed", "cancel cheyyi", "vaddu"]:
+            if not session.pending_confirmation and not session.session_data.get("browser_state"):
+                logger.info(f"Command '{original}' ignored because no confirmation/conversational state is pending.")
+                event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                return "Waiting Boss"
         
         # Determine language context for this command
         input_lang, explicit_switch = detect_language_intent(original)
@@ -531,6 +726,48 @@ class Orchestrator:
             if "Closing" in english_response:
                 return english_response.replace("Closing", "క్లోజ్ చేస్తున్నాను")
             return english_response
+            
+        # 0. DIRECT LOCAL ROUTING (SYSTEM & VOLUME)
+        # Bypass LLM completely for deterministic system controls
+        vol_lower = original
+        if vol_lower in ["volume up", "increase volume", "volume penchu", "volume penchandi"]:
+            t_act_start = time.perf_counter()
+            res = self._system_agent._do_execute_task("volume", {"action": "volume_up"})
+            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
+            return res
+        elif vol_lower in ["volume down", "decrease volume", "volume tagginchu", "volume tagginchandi"]:
+            t_act_start = time.perf_counter()
+            res = self._system_agent._do_execute_task("volume", {"action": "volume_down"})
+            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
+            return res
+        elif vol_lower in ["mute", "mute volume", "mute cheyyi", "mute chey"]:
+            t_act_start = time.perf_counter()
+            res = self._system_agent._do_execute_task("volume", {"action": "mute"})
+            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
+            return res
+        elif vol_lower in ["unmute", "unmute volume", "unmute cheyyi", "unmute chey"]:
+            t_act_start = time.perf_counter()
+            res = self._system_agent._do_execute_task("volume", {"action": "unmute"})
+            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
+            return res
+        elif vol_lower.startswith("set volume to ") or ("volume" in vol_lower and "percent" in vol_lower):
+            import re
+            match = re.search(r'\b(\d+)\b', vol_lower)
+            if match:
+                t_act_start = time.perf_counter()
+                res = self._system_agent._do_execute_task("volume", {"action": "set_volume", "level": int(match.group(1))})
+                action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+                command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+                self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
+                return res
 
         # 0. PERMANENTLY UNSUPPORTED DESTRUCTIVE COMMANDS SECURITY BLOCK
         # Factory Reset, Format Drive, and Delete All Files are permanently unsupported for security.
@@ -570,9 +807,20 @@ class Orchestrator:
                 log_security_audit(old_cmd, "Overridden")
                 session.clear_pending_confirmation()
 
+            # Map action correctly
+            mapped_action = "shutdown_pc"
+            if "restart" in matched_dangerous_key or "reboot" in matched_dangerous_key:
+                mapped_action = "restart_pc"
+            elif "sign out" in matched_dangerous_key or "log out" in matched_dangerous_key or "sign me out" in matched_dangerous_key:
+                mapped_action = "sign_out_pc"
+            elif "sleep" in matched_dangerous_key:
+                mapped_action = "sleep_pc"
+            elif "lock" in matched_dangerous_key:
+                mapped_action = "lock_pc"
+                
             # Set new pending confirmation with unique confirmation ID
             conf_data = session.set_pending_confirmation(
-                action="shutdown_pc" if matched_dangerous_key in ["shutdown pc", "shutdown computer", "turn off pc", "turn off computer", "power off computer", "power off windows"] else display_name,
+                action=mapped_action,
                 command=matched_dangerous_key,
                 requires_double=requires_double,
                 action_phrase=action_phrase,
@@ -580,9 +828,18 @@ class Orchestrator:
             )
             logger.info(f"Initiated dangerous command confirmation [{conf_data['confirmation_id']}] for '{matched_dangerous_key}'")
             event_bus.publish(event_bus.TASK_FINISHED, command=original)
-            if matched_dangerous_key in ["shutdown pc", "shutdown computer", "turn off pc", "turn off computer", "power off computer", "power off windows"]:
-                return "Are you sure, Boss?\nYou requested to shut down your computer.\nPlease say 'Yes' to continue or 'Cancel' to abort."
-            return "Are you sure, Boss?"
+            
+            action_noun = "shut down your computer"
+            if mapped_action == "restart_pc":
+                action_noun = "restart your computer"
+            elif mapped_action == "sign_out_pc":
+                action_noun = "sign out of your computer"
+            elif mapped_action == "sleep_pc":
+                action_noun = "put your computer to sleep"
+            elif mapped_action == "lock_pc":
+                action_noun = "lock your computer"
+
+            return f"Are you sure, Boss?\nYou requested to {action_noun}.\nPlease say 'Yes' to continue or 'Cancel' to abort."
 
         # 0C. EVALUATE PENDING CONFIRMATION REPLIES
         if session.pending_confirmation:
@@ -595,40 +852,76 @@ class Orchestrator:
             action_phrase = pending["action_phrase"].lower()
             exec_func = pending["exec_func"]
 
-            is_shutdown = action_type == "shutdown_pc" or cmd_name in ["shutdown pc", "shutdown computer", "turn off pc", "turn off computer", "power off computer", "power off windows"]
+            is_dangerous_action = action_type in ["shutdown_pc", "restart_pc", "sign_out_pc", "sleep_pc", "lock_pc"]
 
-            if is_shutdown:
-                shutdown_confirm_set = {"yes", "yes boss", "confirm", "continue", "proceed"}
-                shutdown_cancel_set = {"no", "cancel", "stop", "never mind"}
+            if is_dangerous_action:
+                confirm_set = CONFIRM_RESPONSES
+                cancel_set = CANCEL_RESPONSES
 
-                if original in shutdown_confirm_set or command in shutdown_confirm_set:
+                if original in confirm_set or command in confirm_set:
                     pending["validated"] = True
                     pending["confirmed"] = True
                     log_security_audit(cmd_name, "Confirmed")
-                    confirm_msg = "Confirmation received.\nShutting down your computer.\nGoodbye, Boss."
-                    try:
-                        from voice.speech_output import speak
-                        speak(confirm_msg)
-                        session.session_data["_already_spoken"] = True
-                    except Exception as e:
-                        logger.error(f"TTS confirmation error: {e}")
+                    
+                    if action_type == "shutdown_pc":
+                        confirm_msg = "Confirmation received.\nShutting down your computer.\nGoodbye, Boss."
+                    elif action_type == "restart_pc":
+                        confirm_msg = "Confirmation received.\nRestarting your computer.\nGoodbye, Boss."
+                    elif action_type == "sign_out_pc":
+                        confirm_msg = "Confirmation received.\nSigning out of your computer.\nGoodbye, Boss."
+                    elif action_type == "sleep_pc":
+                        confirm_msg = "Confirmation received.\nPutting your computer to sleep, Boss."
+                    elif action_type == "lock_pc":
+                        confirm_msg = "Confirmation received.\nLocking your computer, Boss."
+                    else:
+                        confirm_msg = "Confirmation received, Boss."
 
+                    t_act_start = time.perf_counter()
+                    res = None
                     if exec_func:
-                        exec_func()
-                    event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                        res = exec_func()
+                    action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+                    command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+
+                    action_failed = False
+                    if isinstance(res, str) and ("Security block" in res or "Cannot" in res or "failed" in res or "Blocked" in res):
+                        action_failed = True
+                        confirm_msg = f"Failed to execute action, Boss: {res}"
+                        log_security_audit(cmd_name, f"Failed: {res}")
+                        session.clear_pending_confirmation()
+                    else:
+                        try:
+                            from voice.speech_output import speak
+                            speak(confirm_msg)
+                            session.session_data["_already_spoken"] = True
+                        except Exception as e:
+                            logger.error(f"TTS confirmation error: {e}")
+                        session.clear_pending_confirmation()
+
+                    self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
                     return confirm_msg
-                elif original in shutdown_cancel_set or command in shutdown_cancel_set:
+                elif original in cancel_set or command in cancel_set:
                     log_security_audit(cmd_name, "Cancelled")
                     session.clear_pending_confirmation()
                     event_bus.publish(event_bus.TASK_FINISHED, command=original)
-                    return "Shutdown cancelled, Boss."
+                    action_noun = "Action"
+                    if action_type == "shutdown_pc":
+                        action_noun = "Shutdown"
+                    elif action_type == "restart_pc":
+                        action_noun = "Restart"
+                    elif action_type == "sign_out_pc":
+                        action_noun = "Sign out"
+                    elif action_type == "sleep_pc":
+                        action_noun = "Sleep"
+                    elif action_type == "lock_pc":
+                        action_noun = "Lock"
+                    return f"{action_noun} cancelled, Boss."
                 else:
-                    # Unrelated command spoken while shutdown confirmation pending -> cancel & execute new command
                     log_security_audit(cmd_name, "Cancelled")
                     session.clear_pending_confirmation()
-                    logger.info("Pending shutdown confirmation cancelled due to unrelated command. Executing new command...")
+                    logger.info("Pending dangerous action confirmation cancelled due to unrelated command. Executing new command...")
                     new_res = self.process_command(original_command)
-                    return f"Shutdown request cancelled.\n{new_res}"
+                    return f"Action cancelled.\n{new_res}"
 
             is_confirmed = original in CONFIRM_RESPONSES or command in CONFIRM_RESPONSES
             is_step2_confirmed = is_confirmed or (action_phrase in original or action_phrase in command)
@@ -648,10 +941,12 @@ class Orchestrator:
                         return f"This action cannot be undone. Say '{pending['action_phrase']}' before execution."
                     else:
                         log_security_audit(cmd_name, "Confirmed")
+                        pending["validated"] = True
+                        pending["confirmed"] = True
+                        res = exec_func() if exec_func else "Confirmation received."
                         session.clear_pending_confirmation()
-                        res = exec_func() if exec_func else "Executed."
                         event_bus.publish(event_bus.TASK_FINISHED, command=original)
-                        return "Confirmation received."
+                        return str(res)
                 elif original in CANCEL_RESPONSES or command in CANCEL_RESPONSES:
                     log_security_audit(cmd_name, "Cancelled")
                     session.clear_pending_confirmation()
@@ -672,10 +967,12 @@ class Orchestrator:
                         return "This feature is disabled in the current production build."
 
                     log_security_audit(cmd_name, "Confirmed")
+                    pending["validated"] = True
+                    pending["confirmed"] = True
+                    res = exec_func() if exec_func else "Confirmation received."
                     session.clear_pending_confirmation()
-                    res = exec_func() if exec_func else "Executed."
                     event_bus.publish(event_bus.TASK_FINISHED, command=original)
-                    return "Confirmation received."
+                    return str(res)
                 else:
                     log_security_audit(cmd_name, "Cancelled")
                     session.clear_pending_confirmation()
@@ -732,8 +1029,7 @@ class Orchestrator:
         # This prevents "open whatsapp" or "close youtube" from being treated as a search query.
         is_explicit_override = False
         if browser_state:
-            override_triggers = ["open ", "close ", "lock ", "shutdown ", "restart "]
-            if any(original.startswith(k) for k in override_triggers):
+            if is_deterministic_command(original) and not any(k in original for k in ["cancel", "never mind", "stop", "vaddu", "cancel cheyyi", "yes", "confirm", "proceed", "no"]):
                 is_explicit_override = True
                 logger.info(f"Explicit command '{original}' overriding pending browser state.")
                 session.session_data.pop("browser_state", None)
@@ -783,10 +1079,14 @@ class Orchestrator:
                     
                 target_url = KNOWN_WEBSITES[resolved_key]
                 t_id = f"task_{int(time.time() * 1000)}"
+                t_act_start = time.perf_counter()
                 res = self.agent_manager.dispatch_task("browser_agent", t_id, {
                     "action": "open_url",
                     "url": target_url,
                 })
+                action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+                command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+                self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
                 
                 if res.get("status") == "SUCCESS" and res.get("result", {}).get("status") != "ERROR":
                     searchable = ["youtube", "google", "github", "x", "twitter"]
@@ -823,10 +1123,14 @@ class Orchestrator:
                     search_url = f"https://www.google.com/search?q=site:{target_site}.com+{query}"
                     
                 t_id = f"task_{int(time.time() * 1000)}"
+                t_act_start = time.perf_counter()
                 res = self.agent_manager.dispatch_task("browser_agent", t_id, {
                     "action": "open_url",
                     "url": search_url,
                 })
+                action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+                command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+                self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
                 
                 session.session_data.pop("browser_state", None)
                 session.session_data.pop("browser_target", None)

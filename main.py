@@ -63,9 +63,15 @@ def start_ultron() -> None:
                     result = orchestrator.process_command(command_str)
                     logger.info(f"{config.ASSISTANT_NAME}: {result}")
                     if not session.session_data.pop("_already_spoken", False):
-                        import threading
-                        threading.Thread(target=speak, args=(result,), daemon=True).start()
-                    time.sleep(0.2)
+                        # CRITICAL: speak() MUST run on the same thread that created the
+                        # pyttsx3/SAPI5 engine (main thread). Running it in a daemon thread
+                        # causes a COM STA cross-apartment deadlock: engine.runAndWait()
+                        # blocks waiting for the main thread's COM event pump, but the main
+                        # thread is also blocked → _speaking_flag is never cleared →
+                        # ULTRON goes permanently deaf. Call synchronously here instead.
+                        # Voice interruption still works via the background interruption
+                        # listener (start_interruption_listener inside speak()).
+                        speak(result)
 
             except KeyboardInterrupt:
                 logger.info("Keyboard interrupt detected. Shutting down...")

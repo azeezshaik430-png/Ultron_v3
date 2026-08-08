@@ -1,18 +1,17 @@
 import pytest
 import time
-from brain.orchestrator import Orchestrator
+from brain.orchestrator import orchestrator
 from core.session import session
 
 class TestConversationalBrowser:
     
     @pytest.fixture(autouse=True)
     def setup_orchestrator(self):
-        self.orchestrator = Orchestrator()
+        self.orchestrator = orchestrator
         session.reset()
         session.session_data.clear()
         session.preferred_language = "en"
         yield
-        self.orchestrator.shutdown()
         session.reset()
         session.session_data.clear()
 

@@ -178,6 +178,8 @@ class AgentManager(IService):
                     logger.warning(f"[AgentManager] Error shutting down agent '{agent_id}': {err}")
 
             self.bus.shutdown()
+            if hasattr(self, "_executor") and self._executor:
+                self._executor.shutdown(wait=False)
             self._is_initialized = False
             logger.info("[AgentManager] AgentManager shutdown complete.")
 

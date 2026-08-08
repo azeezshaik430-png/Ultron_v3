@@ -1,7 +1,7 @@
 """
 ULTRON V3
 Speech Input System
-Sounddevice Microphone Handler
+Sounddevice / SpeechRecognition Microphone Handler
 """
 
 import sounddevice as sd
@@ -9,16 +9,38 @@ import speech_recognition as sr
 import scipy.io.wavfile as wav
 import tempfile
 import os
+import time
+import threading
 from core.logger import logger
 from core.config import config
 
+# Global Speech Recognizer Configuration
 recognizer = sr.Recognizer()
+recognizer.dynamic_energy_threshold = True
+recognizer.dynamic_energy_adjustment_damping = 0.15
+recognizer.dynamic_energy_ratio = 1.5
+recognizer.pause_threshold = 0.8
 
-
-import threading
-
+_calibrated = False
+_calibration_lock = threading.Lock()
 _interruption_stop_fn = None
 _interruption_lock = threading.Lock()
+
+
+def calibrate_ambient_noise(source, duration=0.5, force=False):
+    """Perform lazy one-time ambient-noise calibration and cache energy threshold."""
+    global _calibrated
+    with _calibration_lock:
+        if not _calibrated or force:
+            t_start = time.perf_counter()
+            recognizer.adjust_for_ambient_noise(source, duration=duration)
+            _calibrated = True
+            calib_ms = (time.perf_counter() - t_start) * 1000.0
+            logger.info(
+                f"[SpeechInput] Ambient noise calibrated in {calib_ms:.2f} ms | "
+                f"Energy Threshold: {recognizer.energy_threshold:.2f}"
+            )
+
 
 def _interruption_callback(recognizer_instance, audio):
     from voice.speech_output import speaking, stop_speaking
@@ -39,6 +61,7 @@ def _interruption_callback(recognizer_instance, audio):
     except Exception:
         pass
 
+
 def start_interruption_listener():
     global _interruption_stop_fn
     with _interruption_lock:
@@ -52,6 +75,7 @@ def start_interruption_listener():
         except Exception as e:
             logger.error(f"[VoiceInterrupt] Failed to start listener: {e}")
 
+
 def stop_interruption_listener():
     global _interruption_stop_fn
     with _interruption_lock:
@@ -62,82 +86,82 @@ def stop_interruption_listener():
                 pass
             _interruption_stop_fn = None
 
+
 def listen(silent=False):
-    from voice.speech_output import speaking, stop_speaking
-    
+    from voice.speech_output import speaking
+
+    # CRITICAL: release the interruption-listener mic handle first.
+    # start_interruption_listener() (called inside speak()) opens sr.Microphone()
+    # in a background thread. If we attempt to open a second Microphone stream
+    # while that background thread is still holding the device, PyAudio on Windows
+    # blocks or silently fails. Stopping the listener here guarantees the device
+    # is free before we try to record.
+    stop_interruption_listener()
+
     # Do not record while speaking if we are handling it in background
     if speaking():
-        import time
         time.sleep(0.5)
         return ""
 
     if not silent:
         logger.info("Listening Boss...")
 
-    temp_path = None
+    t_listen_start = time.perf_counter()
 
     try:
-        sample_rate = config.AUDIO_SAMPLE_RATE
-        duration = config.AUDIO_RECORD_DURATION
-
         if not silent:
             logger.info("Speak Boss...")
 
-        recording = sd.rec(
-            int(duration * sample_rate),
-            samplerate=sample_rate,
-            channels=1,
-            dtype="int16"
+        m = sr.Microphone()
+        with m as source:
+            calibrate_ambient_noise(source, duration=0.5)
+            try:
+                audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
+            except sr.WaitTimeoutError:
+                if not silent:
+                    logger.debug("[SpeechInput] Listen timeout: No speech detected within timeout window (5s)")
+                return ""
+
+        t_stt_start = time.perf_counter()
+        text = recognizer.recognize_google(
+            audio,
+            language="en-IN"
         )
-        sd.wait()
+        stt_latency_ms = (time.perf_counter() - t_stt_start) * 1000.0
+        total_listen_latency_ms = (time.perf_counter() - t_listen_start) * 1000.0
+        logger.info(
+            f"[Instrumentation] stt_latency_ms: {stt_latency_ms:.2f} ms | "
+            f"total_listen_latency_ms: {total_listen_latency_ms:.2f} ms | "
+            f"energy_threshold: {recognizer.energy_threshold:.2f}"
+        )
+        
+        text_lower = text.lower().strip()
+            
+        if not silent:
+            logger.info(f"You said: {text}")
+        return text_lower
 
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-            temp_path = temp_file.name
+    except sr.UnknownValueError:
+        if not silent:
+            logger.info("[SpeechInput] Didn't understand Boss (STT UnknownValueError)")
+        return ""
 
-        wav.write(temp_path, sample_rate, recording)
-
-        with sr.AudioFile(temp_path) as source:
-            audio = recognizer.record(source)
-
-        try:
-            text = recognizer.recognize_google(
-                audio,
-                language="en-IN"
-            )
-            text_lower = text.lower()
-                
-            if not silent:
-                logger.info(f"You said: {text}")
-            return text_lower
-
-        except sr.UnknownValueError:
-            if not silent:
-                logger.info("Didn't understand Boss")
-            return ""
-
-        except sr.RequestError:
-            if not silent:
-                logger.warning("Speech service unavailable")
-            return ""
+    except sr.RequestError as e:
+        if not silent:
+            logger.warning(f"[SpeechInput] Speech service unavailable (STT RequestError: {e})")
+        return ""
 
     except KeyboardInterrupt:
-        logger.info("Voice input stopped")
+        logger.info("Voice input stopped by user")
         return ""
 
     except Exception as e:
-        logger.error(f"Voice Error: {e}")
+        logger.error(f"[SpeechInput] Voice Error: {type(e).__name__}: {e}")
         return ""
-
-    finally:
-        if temp_path and os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except Exception:
-                pass
 
 
 if __name__ == "__main__":
     while True:
         command = listen()
         if command:
-            logger.info(f"Command: {command}")
+            logger.info(f"Command: {command}")

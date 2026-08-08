@@ -22,6 +22,25 @@ _stop_flag = threading.Event()
 _engine_lock = threading.RLock()
 _current_engine = None
 _piper_telugu_voice = None
+_sapi5_engine = None
+import time
+
+def _get_sapi5_engine():
+    global _sapi5_engine
+    if _sapi5_engine is None:
+        with _engine_lock:
+            if _sapi5_engine is None:
+                _init_com_if_needed()
+                try:
+                    logger.info("[VoiceOutput] Initializing pyttsx3 global SAPI5 engine...")
+                    _sapi5_engine = pyttsx3.init()
+                    rate = getattr(config, "VOICE_RATE", 170)
+                    volume = getattr(config, "VOICE_VOLUME", 1.0)
+                    _sapi5_engine.setProperty("rate", rate)
+                    _sapi5_engine.setProperty("volume", volume)
+                except Exception as err:
+                    logger.error(f"[VoiceOutput] TTS_ERROR initializing global SAPI5 engine: {err}")
+    return _sapi5_engine
 
 
 def clean_voice_text(text: str) -> str:
@@ -119,16 +138,16 @@ def speak(text: str, language: str = None) -> bool:
 
     try:
         if language == "te":
-            # Detect available Telugu Windows voices dynamically
-            import pyttsx3
-            engine_test = pyttsx3.init()
-            voices = engine_test.getProperty("voices")
+            # Reuse the cached SAPI5 engine — do NOT call pyttsx3.init() here;
+            # that would leak a new COM engine instance on every call.
+            engine_test = _get_sapi5_engine()
+            voices = engine_test.getProperty("voices") if engine_test else []
             sapi_telugu_voice = None
             for v in voices:
                 if "telugu" in v.name.lower() or "te-" in v.id.lower():
                     sapi_telugu_voice = v
                     break
-            
+
             if sapi_telugu_voice:
                 return _speak_sapi5_with_voice(clean_txt, sapi_telugu_voice, "te")
             else:
@@ -141,27 +160,21 @@ def speak(text: str, language: str = None) -> bool:
 def _speak_sapi5_with_voice(clean_txt: str, voice, lang: str) -> bool:
     """Synthesize text using a specific Windows SAPI5 voice."""
     global _current_engine
-    _init_com_if_needed()
+    engine = _get_sapi5_engine()
+    if engine is None:
+        return False
 
-    logger.info(f"[VoiceOutput] TTS_ENGINE_INITIALIZING (Lang: {lang})")
-    engine = None
+    t_start = time.perf_counter()
     with _engine_lock:
         try:
-            engine = pyttsx3.init()
-            rate = getattr(config, "VOICE_RATE", 170)
-            volume = getattr(config, "VOICE_VOLUME", 1.0)
-            engine.setProperty("rate", rate)
-            engine.setProperty("volume", volume)
             engine.setProperty("voice", voice.id)
-            
             logger.info(
                 f"[VoiceOutput] TTS_SELECTED_VOICE: '{voice.name}' | "
                 f"Gender: Unknown | ID: '{voice.id}'"
             )
-            logger.info(f"[VoiceOutput] TTS_ENGINE_READY (Voice: '{voice.name}')")
             _current_engine = engine
         except Exception as err:
-            logger.error(f"[VoiceOutput] TTS_ERROR initializing SAPI5 engine: {err}")
+            logger.error(f"[VoiceOutput] TTS_ERROR configuring voice on SAPI5 engine: {err}")
             _speaking_flag.clear()
             _current_engine = None
             return False
@@ -172,6 +185,8 @@ def _speak_sapi5_with_voice(clean_txt: str, voice, lang: str) -> bool:
     try:
         if not _stop_flag.is_set():
             engine.say(clean_txt)
+            tts_latency_ms = (time.perf_counter() - t_start) * 1000.0
+            logger.info(f"[Instrumentation] tts_latency_ms: {tts_latency_ms:.2f} ms")
             engine.runAndWait()
 
         if _stop_flag.is_set():
@@ -192,12 +207,15 @@ def _speak_sapi5_with_voice(clean_txt: str, voice, lang: str) -> bool:
 
 def _speak_telugu_piper(clean_txt: str) -> bool:
     """Synthesize Telugu text using local Piper ONNX male voice engine."""
+    t_start = time.perf_counter()
     voice = _get_piper_telugu_voice()
     if voice is None:
         logger.warning("[VoiceOutput] Piper Telugu voice unavailable. Falling back to SAPI5 English.")
         return _speak_english_sapi5(clean_txt)
-
+ 
     logger.info("[VoiceOutput] TTS_ENGINE_READY (Voice: 'te_IN-venkatesh-medium' | Gender: Male | Lang: te)")
+    tts_latency_ms = (time.perf_counter() - t_start) * 1000.0
+    logger.info(f"[Instrumentation] tts_latency_ms: {tts_latency_ms:.2f} ms")
     logger.info("[VoiceOutput] TTS_PLAYBACK_STARTED")
 
     interrupted = False
@@ -238,18 +256,13 @@ def _speak_telugu_piper(clean_txt: str) -> bool:
 def _speak_english_sapi5(clean_txt: str) -> bool:
     """Synthesize English text using Windows SAPI5 Microsoft David (Male) engine."""
     global _current_engine
-    _init_com_if_needed()
+    engine = _get_sapi5_engine()
+    if engine is None:
+        return False
 
-    logger.info("[VoiceOutput] TTS_ENGINE_INITIALIZING (Lang: en)")
-    engine = None
+    t_start = time.perf_counter()
     with _engine_lock:
         try:
-            engine = pyttsx3.init()
-            rate = getattr(config, "VOICE_RATE", 170)
-            volume = getattr(config, "VOICE_VOLUME", 1.0)
-            engine.setProperty("rate", rate)
-            engine.setProperty("volume", volume)
-
             voices = engine.getProperty("voices")
             selected_voice = None
             male_keywords = ["david", "male", "mark", "george", "james", "richard", "guy"]
@@ -267,13 +280,9 @@ def _speak_english_sapi5(clean_txt: str) -> bool:
                     f"[VoiceOutput] TTS_SELECTED_VOICE: '{selected_voice.name}' | "
                     f"Gender: Male | ID: '{selected_voice.id}'"
                 )
-                logger.info(f"[VoiceOutput] TTS_ENGINE_READY (Voice: '{selected_voice.name}')")
-            else:
-                logger.info("[VoiceOutput] TTS_ENGINE_READY (Default Voice)")
-
             _current_engine = engine
         except Exception as err:
-            logger.error(f"[VoiceOutput] TTS_ERROR initializing SAPI5 engine: {err}")
+            logger.error(f"[VoiceOutput] TTS_ERROR configuring voice on SAPI5 engine: {err}")
             _speaking_flag.clear()
             _current_engine = None
             return False
@@ -284,6 +293,8 @@ def _speak_english_sapi5(clean_txt: str) -> bool:
     try:
         if not _stop_flag.is_set():
             engine.say(clean_txt)
+            tts_latency_ms = (time.perf_counter() - t_start) * 1000.0
+            logger.info(f"[Instrumentation] tts_latency_ms: {tts_latency_ms:.2f} ms")
             engine.runAndWait()
 
         if _stop_flag.is_set():

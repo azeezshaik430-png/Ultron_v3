@@ -18,6 +18,10 @@ def _adapter():
 def _result_str(result: dict, fallback: str) -> str:
     """Extract the user-facing string from an adapter result dict."""
     if result.get("available"):
+        if result.get("error"):
+            return f"Cannot control volume: {result.get('error')}"
+        if not result.get("verified", True):
+            return "Volume verification failed, Boss."
         return result.get("result") or fallback
     reason = result.get("reason", "Audio control unavailable on this platform.")
     return f"Cannot control volume: {reason}"
@@ -45,3 +49,12 @@ def max_volume():
 
 def min_volume():
     return _result_str(_adapter().set_volume(0.0), "Minimum volume activated Boss.")
+
+
+def set_volume_pct(percent: int):
+    try:
+        pct = max(0, min(100, int(percent)))
+        val = pct / 100.0
+        return _result_str(_adapter().set_volume(val), f"Volume set to {pct} percent, Boss.")
+    except (ValueError, TypeError):
+        return "Cannot set volume: invalid percentage."

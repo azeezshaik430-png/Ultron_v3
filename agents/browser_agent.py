@@ -7,6 +7,8 @@ Integrates BaseUltronAgent, WorkspaceACL, Security Confirmation Guards, and Agen
 import os
 import sys
 import time
+import uuid
+import threading
 import urllib.parse
 from typing import Dict, Any, Optional, List
 
@@ -56,6 +58,8 @@ class BrowserAgent(BaseUltronAgent):
             "scroll",
             "screenshot",
             "close_browser",
+            "go_back",
+            "play_nth_video"
         ]
         supported_skills = ["web_navigation", "web_scraping", "page_inspection", "browser_control"]
         super().__init__(
@@ -72,6 +76,7 @@ class BrowserAgent(BaseUltronAgent):
         self._browser_instance: Optional[Any] = None
         self._page_instance: Optional[Any] = None
         self._active_url: str = ""
+        self._operation_lock = threading.Lock()
 
     def _do_execute_task(self, task_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -98,6 +103,12 @@ class BrowserAgent(BaseUltronAgent):
                 res = self._take_screenshot(payload)
             elif action in ["close_browser", "close"]:
                 res = self._close_browser(payload)
+            elif action in ["go_back", "back"]:
+                res = self._go_back(payload)
+            elif action in ["play_nth_video"]:
+                res = self._play_nth_video(payload)
+            elif action in ["get_url", "url"]:
+                res = self._get_url()
             else:
                 res = {
                     "status": "ERROR",
@@ -112,6 +123,10 @@ class BrowserAgent(BaseUltronAgent):
 
         except Exception as err:
             logger.error(f"[BrowserAgent] Error executing action '{action}': {err}")
+            err_msg = str(err).lower()
+            if any(k in err_msg for k in ["closed", "connection", "epipe", "pipe", "target closed", "browser has been closed"]):
+                logger.warning("[BrowserAgent] Detected connection/pipe error. Cleaning up stale browser handles...")
+                self._cleanup_browser()
             return {
                 "status": "ERROR",
                 "available": False,
@@ -129,7 +144,15 @@ class BrowserAgent(BaseUltronAgent):
                 if self._browser_instance and self._browser_instance.is_connected():
                     return True
 
-                self._playwright_instance = sync_playwright().start()
+                try:
+                    self._playwright_instance = sync_playwright().start()
+                except Exception as e:
+                    if "inside the asyncio loop" in str(e):
+                        logger.warning(f"[BrowserAgent] Detected asyncio loop in sync context. Bypassing check: {e}")
+                        raise
+                    else:
+                        raise
+
                 brave_path = r"C:\Users\AZEEZ\AppData\Local\BraveSoftware\Brave-Browser\Application\brave.exe"
                 self._browser_instance = self._playwright_instance.chromium.launch(
                     headless=headless,
@@ -171,6 +194,26 @@ class BrowserAgent(BaseUltronAgent):
             self._browser_instance = None
             self._playwright_instance = None
             self._active_url = ""
+
+    @property
+    def current_url(self) -> str:
+        """Return the URL of the current active browser page."""
+        if self._page_instance and not self._page_instance.is_closed():
+            try:
+                return self._page_instance.url
+            except Exception:
+                pass
+        return ""
+
+    def _get_url(self) -> Dict[str, Any]:
+        """Query active page url."""
+        if self._page_instance and not self._page_instance.is_closed():
+            try:
+                url = self._page_instance.url
+                return {"status": "SUCCESS", "url": url}
+            except Exception as e:
+                return {"status": "ERROR", "reason": str(e)}
+        return {"status": "ERROR", "reason": "No active page session."}
 
     def _validate_url(self, url: str) -> bool:
         """Validate URL to prevent unsafe schemes or local file access outside authorized workspace."""
@@ -236,25 +279,18 @@ class BrowserAgent(BaseUltronAgent):
                     "reason": f"Browser automation & HTTP navigation failed: {req_err}",
                 }
 
-        if not headless:
-            logger.info("[BrowserAgent] Visible browser launched")
-
         try:
             from urllib.parse import urlparse
             target_domain = urlparse(url).netloc.replace("www.", "")
             
             target_page = None
-            if self._browser_instance and self._browser_instance.contexts:
-                context = self._browser_instance.contexts[0]
-                for p in context.pages:
-                    if not p.is_closed():
-                        # If page is essentially blank (about:blank), we can just reuse it
-                        if p.url == "about:blank":
-                            target_page = p
-                            break
-                        
-                        p_domain = urlparse(p.url).netloc.replace("www.", "")
-                        if target_domain and p_domain and target_domain in p_domain:
+            if self._page_instance and not self._page_instance.is_closed():
+                target_page = self._page_instance
+            else:
+                if self._browser_instance and self._browser_instance.contexts:
+                    context = self._browser_instance.contexts[0]
+                    for p in context.pages:
+                        if not p.is_closed():
                             target_page = p
                             break
                             
@@ -285,6 +321,10 @@ class BrowserAgent(BaseUltronAgent):
             }
         except Exception as e:
             logger.error(f"[BrowserAgent] Navigation error for '{url}': {e}")
+            err_msg = str(e).lower()
+            if any(k in err_msg for k in ["closed", "connection", "epipe", "pipe", "target closed", "browser has been closed"]):
+                logger.warning("[BrowserAgent] Detected connection/pipe error during open_url. Cleaning up stale browser handles...")
+                self._cleanup_browser()
             return {
                 "status": "ERROR",
                 "available": False,
@@ -306,6 +346,7 @@ class BrowserAgent(BaseUltronAgent):
                 "reason": "No active browser session. Call open_url first.",
             }
 
+
         try:
             page_text = self._page_instance.inner_text("body", timeout=5000)
             title = self._page_instance.title()
@@ -325,6 +366,151 @@ class BrowserAgent(BaseUltronAgent):
                 "available": False,
                 "reason": f"Failed to extract page text: {e}",
             }
+
+    def _go_back(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Navigate browser back one page deterministically."""
+        if not self._page_instance or not self._browser_instance:
+            return {
+                "status": "ERROR",
+                "available": False,
+                "reason": "No active browser session to navigate back from.",
+            }
+        try:
+            resp = self._page_instance.go_back(timeout=10000, wait_until="domcontentloaded")
+            if not resp:
+                return {
+                    "status": "ERROR",
+                    "available": False,
+                    "reason": "No previous page in history to navigate back to.",
+                }
+            url = self._page_instance.url
+            title = self._page_instance.title()
+            self._active_url = url
+            logger.info(f"[BrowserAgent] Navigated back to '{url}' | Title: '{title}'")
+            return {
+                "status": "SUCCESS",
+                "available": True,
+                "url": url,
+                "title": title,
+                "result": f"Successfully navigated back to '{url}' ({title}).",
+            }
+        except Exception as e:
+            return {
+                "status": "ERROR",
+                "available": False,
+                "reason": f"Browser back navigation failed: {e}",
+            }
+
+    def _play_nth_video(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Locate and click the Nth YouTube search result video deterministically."""
+        with self._operation_lock:
+            if not self._browser_instance or not self._browser_instance.is_connected():
+                return {
+                    "status": "ERROR",
+                    "available": False,
+                    "reason": "No active browser session.",
+                }
+
+            # Stale page recovery
+            if not self._page_instance or self._page_instance.is_closed():
+                logger.warning("[BrowserAgent] Page became stale or closed. Attempting recovery...")
+                try:
+                    if self._browser_instance.contexts:
+                        self._page_instance = self._browser_instance.contexts[0].new_page()
+                    else:
+                        raise Exception("No contexts available.")
+                    if self._active_url:
+                        self._page_instance.goto(self._active_url, timeout=15000)
+                except Exception as e:
+                    return {
+                        "status": "ERROR",
+                        "available": False,
+                        "reason": f"Failed to recover stale page: {e}",
+                    }
+
+            try:
+                index = payload.get("index", 0)
+                selector_fallbacks = [
+                    "ytd-video-renderer a#video-title",
+                    "ytd-video-renderer a#video-title-link",
+                    "ytd-grid-video-renderer a#video-title",
+                    "a#video-title",
+                    "h3 a"
+                ]
+                
+                locators = None
+                count = 0
+                for sel in selector_fallbacks:
+                    try:
+                        temp_loc = self._page_instance.locator(sel)
+                        temp_loc.first.wait_for(timeout=2000, state="attached")
+                        if temp_loc.count() > 0:
+                            locators = temp_loc
+                            count = temp_loc.count()
+                            logger.info(f"[BrowserAgent] Found {count} YouTube video elements using selector '{sel}'")
+                            break
+                    except Exception:
+                        pass
+                
+                if locators is None:
+                    locators = self._page_instance.locator("ytd-video-renderer a#video-title")
+                    try:
+                        locators.first.wait_for(timeout=2000, state="attached")
+                        count = locators.count()
+                    except Exception:
+                        pass
+                        
+                if index >= count:
+                    return {
+                        "status": "ERROR",
+                        "available": False,
+                        "reason": f"Requested video index {index+1}, but only {count} results found.",
+                    }
+                
+                target_el = locators.nth(index)
+                video_title = target_el.text_content().strip() if target_el.text_content() else "Video"
+                target_el.scroll_into_view_if_needed()
+                target_el.click(timeout=5000)
+                
+                # Verify URL changes to watch
+                try:
+                    self._page_instance.wait_for_url("**/watch?v=**", timeout=10000)
+                except Exception:
+                    pass
+                    
+                new_url = self._page_instance.url
+                self._active_url = new_url
+                if "/watch?v=" not in new_url:
+                    return {
+                        "status": "ERROR",
+                        "available": False,
+                        "reason": f"Clicked result but did not reach a YouTube watch page. URL: {new_url}",
+                    }
+
+                # Verify Player state
+                try:
+                    player = self._page_instance.locator("div#movie_player")
+                    player.wait_for(timeout=5000, state="visible")
+                except Exception:
+                    return {
+                        "status": "ERROR",
+                        "available": False,
+                        "reason": "Reached watch page, but the video player is not visible or failed to load.",
+                    }
+                
+                return {
+                    "status": "SUCCESS",
+                    "available": True,
+                    "url": new_url,
+                    "title": video_title,
+                    "result": f"Playing video: '{video_title}'.",
+                }
+            except Exception as e:
+                return {
+                    "status": "ERROR",
+                    "available": False,
+                    "reason": f"Failed to play video result: {e}",
+                }
 
     def _click_element(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Click specified element selector on active page with security check."""

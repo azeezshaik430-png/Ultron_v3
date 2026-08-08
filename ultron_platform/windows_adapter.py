@@ -151,88 +151,150 @@ class WindowsAdapter(PlatformAdapter):
 
     def _get_volume_interface(self) -> Any:
         """Return a pycaw IAudioEndpointVolume COM interface."""
-        from ctypes import POINTER, cast
-        from comtypes import CLSCTX_ALL
-        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-
+        from pycaw.pycaw import AudioUtilities
         devices = AudioUtilities.GetSpeakers()
-        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        from ctypes import POINTER, cast
-        volume = cast(interface, POINTER(IAudioEndpointVolume))
-        return volume
+        return devices.EndpointVolume
 
     def volume_up(self, step: float = 0.1) -> Dict[str, Any]:
         try:
             vol = self._get_volume_interface()
             current = vol.GetMasterVolumeLevelScalar()
-            vol.SetMasterVolumeLevelScalar(min(current + step, 1.0), None)
-            return {"available": True, "result": "Volume increased Boss."}
+            target = min(current + step, 1.0)
+            vol.SetMasterVolumeLevelScalar(target, None)
+            new_val = vol.GetMasterVolumeLevelScalar()
+            verified = abs(new_val - target) < 0.02 or (target >= 0.98 and new_val >= 0.98)
+            pct = int(round(new_val * 100))
+            return {
+                "available": True,
+                "result": f"Volume is now {pct} percent, Boss.",
+                "verified": verified,
+                "success": True
+            }
         except Exception as exc:
-            return {"available": True, "result": None, "error": str(exc)}
+            logger.error(f"[WindowsAdapter] volume_up failed: {exc}")
+            return {"available": True, "result": None, "error": str(exc), "verified": False, "success": False}
 
     def volume_down(self, step: float = 0.1) -> Dict[str, Any]:
         try:
             vol = self._get_volume_interface()
             current = vol.GetMasterVolumeLevelScalar()
-            vol.SetMasterVolumeLevelScalar(max(current - step, 0.0), None)
-            return {"available": True, "result": "Volume decreased Boss."}
+            target = max(current - step, 0.0)
+            vol.SetMasterVolumeLevelScalar(target, None)
+            new_val = vol.GetMasterVolumeLevelScalar()
+            verified = abs(new_val - target) < 0.02 or (target <= 0.02 and new_val <= 0.02)
+            pct = int(round(new_val * 100))
+            return {
+                "available": True,
+                "result": f"Volume is now {pct} percent, Boss.",
+                "verified": verified,
+                "success": True
+            }
         except Exception as exc:
-            return {"available": True, "result": None, "error": str(exc)}
+            logger.error(f"[WindowsAdapter] volume_down failed: {exc}")
+            return {"available": True, "result": None, "error": str(exc), "verified": False, "success": False}
 
     def mute(self) -> Dict[str, Any]:
         try:
             vol = self._get_volume_interface()
             vol.SetMute(1, None)
-            return {"available": True, "result": "Volume muted Boss."}
+            verified = (vol.GetMute() == 1)
+            return {
+                "available": True,
+                "result": "Volume muted Boss.",
+                "verified": verified,
+                "success": True
+            }
         except Exception as exc:
-            return {"available": True, "result": None, "error": str(exc)}
+            logger.error(f"[WindowsAdapter] mute failed: {exc}")
+            return {"available": True, "result": None, "error": str(exc), "verified": False, "success": False}
 
     def unmute(self) -> Dict[str, Any]:
         try:
             vol = self._get_volume_interface()
             vol.SetMute(0, None)
-            return {"available": True, "result": "Volume unmuted Boss."}
+            verified = (vol.GetMute() == 0)
+            return {
+                "available": True,
+                "result": "Volume unmuted Boss.",
+                "verified": verified,
+                "success": True
+            }
         except Exception as exc:
-            return {"available": True, "result": None, "error": str(exc)}
+            logger.error(f"[WindowsAdapter] unmute failed: {exc}")
+            return {"available": True, "result": None, "error": str(exc), "verified": False, "success": False}
 
     def set_volume(self, level: float) -> Dict[str, Any]:
         try:
             level = max(0.0, min(1.0, level))
             vol = self._get_volume_interface()
             vol.SetMasterVolumeLevelScalar(level, None)
-            label = "Maximum" if level >= 1.0 else ("Minimum" if level <= 0.0 else f"{int(level * 100)}%")
-            return {"available": True, "result": f"{label} volume activated Boss."}
+            new_val = vol.GetMasterVolumeLevelScalar()
+            verified = abs(new_val - level) < 0.02
+            pct = int(round(new_val * 100))
+            label = "Maximum" if pct >= 99 else ("Minimum" if pct <= 1 else f"{pct}%")
+            return {
+                "available": True,
+                "result": f"Volume set to {label} Boss.",
+                "verified": verified,
+                "success": True
+            }
         except Exception as exc:
-            return {"available": True, "result": None, "error": str(exc)}
+            logger.error(f"[WindowsAdapter] set_volume failed: {exc}")
+            return {"available": True, "result": None, "error": str(exc), "verified": False, "success": False}
 
     # =========================================================================
     # SYSTEM POWER / SESSION CONTROL
     # =========================================================================
 
     def shutdown(self, delay_sec: int = 5) -> Dict[str, Any]:
-        """
-        Execute Windows shutdown command.
-        SECURITY: The caller (skills/windows_control.py) has already validated
-        the session token before reaching this point.
-        """
-        os.system(f"shutdown /s /t {delay_sec}")
-        return {"available": True, "result": "Shutting down computer Boss."}
+        try:
+            import subprocess
+            res = subprocess.run(f"shutdown /s /t {delay_sec}", shell=True, capture_output=True, text=True)
+            if res.returncode == 0:
+                return {"available": True, "result": "Shutting down computer Boss.", "verified": True, "success": True}
+            return {"available": True, "result": None, "error": res.stderr.strip(), "verified": False, "success": False}
+        except Exception as e:
+            return {"available": True, "result": None, "error": str(e), "verified": False, "success": False}
 
     def restart(self, delay_sec: int = 5) -> Dict[str, Any]:
-        os.system(f"shutdown /r /t {delay_sec}")
-        return {"available": True, "result": "Restarting computer Boss."}
+        try:
+            import subprocess
+            res = subprocess.run(f"shutdown /r /t {delay_sec}", shell=True, capture_output=True, text=True)
+            if res.returncode == 0:
+                return {"available": True, "result": "Restarting computer Boss.", "verified": True, "success": True}
+            return {"available": True, "result": None, "error": res.stderr.strip(), "verified": False, "success": False}
+        except Exception as e:
+            return {"available": True, "result": None, "error": str(e), "verified": False, "success": False}
 
     def sleep(self) -> Dict[str, Any]:
-        subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"], check=False)
-        return {"available": True, "result": "Going to sleep mode Boss."}
+        try:
+            import subprocess
+            res = subprocess.run("rundll32.exe powrprof.dll,SetSuspendState 0,1,0", shell=True, capture_output=True, text=True)
+            if res.returncode == 0:
+                return {"available": True, "result": "Going to sleep mode Boss.", "verified": True, "success": True}
+            return {"available": True, "result": None, "error": res.stderr.strip(), "verified": False, "success": False}
+        except Exception as e:
+            return {"available": True, "result": None, "error": str(e), "verified": False, "success": False}
 
     def lock(self) -> Dict[str, Any]:
-        os.system("rundll32.exe user32.dll,LockWorkStation")
-        return {"available": True, "result": "Locking computer Boss."}
+        try:
+            import subprocess
+            res = subprocess.run("rundll32.exe user32.dll,LockWorkStation", shell=True, capture_output=True, text=True)
+            if res.returncode == 0:
+                return {"available": True, "result": "Locking computer Boss.", "verified": True, "success": True}
+            return {"available": True, "result": None, "error": res.stderr.strip(), "verified": False, "success": False}
+        except Exception as e:
+            return {"available": True, "result": None, "error": str(e), "verified": False, "success": False}
 
     def sign_out(self) -> Dict[str, Any]:
-        os.system("shutdown /l")
-        return {"available": True, "result": "Signing out Boss."}
+        try:
+            import subprocess
+            res = subprocess.run("shutdown /l", shell=True, capture_output=True, text=True)
+            if res.returncode == 0:
+                return {"available": True, "result": "Signing out Boss.", "verified": True, "success": True}
+            return {"available": True, "result": None, "error": res.stderr.strip(), "verified": False, "success": False}
+        except Exception as e:
+            return {"available": True, "result": None, "error": str(e), "verified": False, "success": False}
 
     def open_settings(self) -> Dict[str, Any]:
         os.system("start ms-settings:")

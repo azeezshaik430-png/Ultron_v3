@@ -25,6 +25,11 @@ _preload_thread: Optional[threading.Thread] = None
 def _get_encoder():
     """Initialization helper for Resemblyzer VoiceEncoder."""
     global _encoder_instance
+    from core.config import config
+    if not getattr(config, "VOICE_AUTH_ENABLED", True):
+        logger.info("[VoiceGuard] Voice authentication disabled via VOICE_AUTH_ENABLED=false. Skipping model initialization.")
+        return None
+
     if _encoder_instance is None:
         logger.info("[VoiceGuard] Initializing VoiceEncoder neural network...")
         t0 = time.perf_counter()
@@ -41,6 +46,11 @@ def preload_voice_guard() -> None:
     Eliminates first-verification model loading latency.
     """
     global _preload_thread
+    from core.config import config
+    if not getattr(config, "VOICE_AUTH_ENABLED", True):
+        logger.info("[VoiceGuard] Voice authentication disabled via VOICE_AUTH_ENABLED=false. Skipping preloading.")
+        return
+
     if _preload_thread is None:
         def _target():
             t_start = time.perf_counter()
@@ -92,12 +102,30 @@ def _get_boss_embedding() -> Optional[np.ndarray]:
     if _cached_boss_embed is not None and mtime == _cached_boss_mtime:
         return _cached_boss_embed
 
+    # File based caching
+    npy_path = BOSS_VOICE.replace(".wav", ".npy")
+    if os.path.exists(npy_path) and os.path.getmtime(npy_path) >= mtime:
+        try:
+            logger.info(f"[VoiceGuard] Loading cached Boss voice embedding from {npy_path}...")
+            t0 = time.perf_counter()
+            _cached_boss_embed = np.load(npy_path)
+            _cached_boss_mtime = mtime
+            elapsed = (time.perf_counter() - t0) * 1000.0
+            logger.info(f"[VoiceGuard] Boss voice reference embedding loaded in {elapsed:.2f} ms.")
+            return _cached_boss_embed
+        except Exception as e:
+            logger.warning(f"[VoiceGuard] Failed to load cached embedding .npy: {e}")
+
     logger.info("[VoiceGuard] Computing and caching Boss voice reference embedding...")
     t0 = time.perf_counter()
     _cached_boss_embed = _get_average_embedding(BOSS_VOICE)
     _cached_boss_mtime = mtime
+    try:
+        np.save(npy_path, _cached_boss_embed)
+    except Exception as e:
+        logger.warning(f"[VoiceGuard] Failed to save cached embedding to .npy: {e}")
     elapsed = (time.perf_counter() - t0) * 1000.0
-    logger.info(f"[VoiceGuard] Boss voice reference embedding cached in {elapsed:.2f} ms.")
+    logger.info(f"[VoiceGuard] Boss voice reference embedding computed and cached in {elapsed:.2f} ms.")
     return _cached_boss_embed
 
 
