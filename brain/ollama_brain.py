@@ -88,25 +88,71 @@ Rules:
 
         answer = response["message"]["content"]
 
-
-
         # Save conversation
-
         save_chat(
-
             prompt,
-
             answer
-
         )
-
 
         return answer
 
+    except Exception as e:
+        return f"Ollama error: {e}"
 
 
+def ask_ollama_stream(prompt):
+    """Streaming generator yielding text tokens from Ollama LLM."""
+    try:
+        memory = load_memory()
+        memory_context = "User Memory:\n"
+        for key, value in memory.items():
+            memory_context += f"{key}: {value}\n"
+
+        chat_context = "Recent Conversation:\n"
+        chats = get_recent_chats()
+        for chat in chats:
+            chat_context += (
+                f"User: {chat['user']}\n"
+                f"ULTRON: {chat['assistant']}\n"
+            )
+
+        stream = ollama.chat(
+            model=MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""
+You are ULTRON V3,
+personal AI assistant.
+
+Rules:
+- Always call user Boss.
+- Use memory when useful.
+- Remember previous conversations.
+- Give short helpful answers.
+
+{memory_context}
+
+{chat_context}
+"""
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            stream=True
+        )
+
+        full_answer = ""
+        for chunk in stream:
+            token = chunk.get("message", {}).get("content", "")
+            if token:
+                full_answer += token
+                yield token
+
+        if full_answer:
+            save_chat(prompt, full_answer)
 
     except Exception as e:
-
-
-        return f"Ollama error: {e}"
+        yield f"Ollama error: {e}"

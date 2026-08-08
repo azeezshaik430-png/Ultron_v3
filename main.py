@@ -64,7 +64,7 @@ def start_ultron() -> None:
                     logger.info(f"{config.ASSISTANT_NAME}: {result}")
                     if not session.session_data.pop("_already_spoken", False):
                         speak(result)
-                    time.sleep(0.2)
+                    time.sleep(0.05)
 
             except KeyboardInterrupt:
                 logger.info("Keyboard interrupt detected. Shutting down...")

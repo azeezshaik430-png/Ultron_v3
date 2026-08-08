@@ -17,7 +17,7 @@ from brain.memory import recall, load_memory
 from brain.smart_memory import extract_memory
 from brain.planner import plan
 from brain.router import route, router_dispatcher
-from voice.speech_output import stop_speaking
+from voice.speech_output import stop_speaking, speak
 
 from skills.app_control import open_app, close_app
 from skills.search_files import search_item
@@ -520,10 +520,32 @@ class Orchestrator:
         if basic_chat is not None:
             return basic_chat
 
-        # 10. UNIFIED LLM MANAGER FALLBACK
-        result = llm_manager.ask(command)
-        event_bus.publish(event_bus.TASK_FINISHED, command=command)
-        return result
+        # 10. UNIFIED LLM MANAGER FALLBACK (STREAMING SENTENCE-LEVEL TTS)
+        full_response = ""
+        sentence_buffer = ""
+        try:
+            for token in llm_manager.ask_stream(command):
+                full_response += token
+                sentence_buffer += token
+                if any(punct in token for punct in [".", "!", "?", "\n"]):
+                    chunk_to_speak = sentence_buffer.strip()
+                    if chunk_to_speak:
+                        speak(chunk_to_speak)
+                    sentence_buffer = ""
+
+            remaining = sentence_buffer.strip()
+            if remaining:
+                speak(remaining)
+
+            session.session_data["_already_spoken"] = True
+            event_bus.publish(event_bus.TASK_FINISHED, command=command)
+            clean_res = full_response.strip()
+            return clean_res if clean_res else "I'm here Boss."
+        except Exception as e:
+            logger.error(f"Streaming LLM Fallback Error: {e}")
+            result = llm_manager.ask(command)
+            event_bus.publish(event_bus.TASK_FINISHED, command=command)
+            return result
 
     def _chat_response(self, command: str) -> Optional[str]:
         """Predefined fast responses."""
