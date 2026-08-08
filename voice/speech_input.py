@@ -16,6 +16,11 @@ recognizer = sr.Recognizer()
 
 
 def listen(silent=False):
+    from voice.speech_output import speaking, stop_speaking
+    if speaking():
+        logger.info("[SpeechInput] Interruption: Stopping active TTS before recording user input.")
+        stop_speaking()
+
     if not silent:
         logger.info("Listening Boss...")
 

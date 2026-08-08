@@ -110,3 +110,42 @@ Rules:
 
 
         return f"Ollama error: {e}"
+
+
+def ask_ollama_stream(prompt):
+    """Stream response tokens incrementally from Ollama local AI model."""
+    try:
+        memory = load_memory()
+        memory_context = "User Memory:\n"
+        for key, value in memory.items():
+            memory_context += f"{key}: {value}\n"
+
+        chat_context = "Recent Conversation:\n"
+        chats = get_recent_chats()
+        for chat in chats:
+            chat_context += f"User: {chat['user']}\nULTRON: {chat['assistant']}\n"
+
+        response = ollama.chat(
+            model=MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"You are ULTRON V3, personal AI assistant.\nRules:\n- Always call user Boss.\n- Use memory when useful.\n- Remember previous conversations.\n- Give short helpful answers.\n\n{memory_context}\n\n{chat_context}"
+                },
+                {"role": "user", "content": prompt}
+            ],
+            stream=True
+        )
+
+        full_answer = []
+        for chunk in response:
+            token = chunk.get("message", {}).get("content", "")
+            if token:
+                full_answer.append(token)
+                yield token
+
+        if full_answer:
+            save_chat(prompt, "".join(full_answer))
+
+    except Exception as e:
+        yield f"Ollama streaming error: {e}"

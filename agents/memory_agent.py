@@ -7,38 +7,22 @@ Integrates existing memory.json / brain.memory with Phase 2A AgentMemoryBus, Wor
 from typing import Dict, Any, Optional, List
 from agents.base_ultron_agent import BaseUltronAgent
 import brain.memory as memory_sys
+from brain.semantic_memory import SemanticMemoryStore
 from core.logger import logger
 
 
 class MemoryAgent(BaseUltronAgent):
     """
-    Memory & Knowledge Domain Agent.
-    
-    Purpose:
-    - Manages persistent memory storage (memory.json), key-value lookup, searching memories,
-      updating, explicit removal, workspace synchronization, and structured memory reporting.
-      
-    Responsibilities:
-    - Stores approved user memories into persistent memory.json and WorkspaceStore.
-    - Retrieves memory entries by key or query.
-    - Updates existing memory items.
-    - Explicitly deletes memory entries upon user request.
-    - Searches knowledge across memories and authorized workspace data.
-    - Returns structured memory entries for Orchestrator integration.
-    
-    Security & ACL:
-    - Respects WorkspaceACL when reading/writing workspace keys.
-    - Does not store sensitive data silently.
-    - Reuses existing memory infrastructure without creating duplicate storage engines.
+    Memory & Knowledge Domain Agent with Canonical Semantic Retrieval.
     """
 
     def __init__(
         self,
         agent_id: str = "memory_agent",
         name: str = "Memory Knowledge Agent",
-        description: str = "Manages persistent user memories, knowledge retrieval, structured queries, and workspace memory sync.",
+        description: str = "Manages persistent user memories, semantic vector retrieval, structured queries, and workspace memory sync.",
         bus: Optional[Any] = None,
-        version: str = "1.0.0",
+        version: str = "1.1.0",
     ) -> None:
         capabilities = [
             "store_memory",
@@ -47,10 +31,13 @@ class MemoryAgent(BaseUltronAgent):
             "delete_memory",
             "search_knowledge",
             "structured_query",
+            "query_semantic_memory",
+            "rank_relevance",
         ]
         supported_skills = [
             "memory_store",
             "memory_recall",
+            "semantic_search",
         ]
         super().__init__(
             agent_id=agent_id,
@@ -61,6 +48,7 @@ class MemoryAgent(BaseUltronAgent):
             bus=bus,
             version=version,
         )
+        self.semantic_store = SemanticMemoryStore()
 
     def _do_execute_task(self, task_id: str, payload: Dict[str, Any]) -> Any:
         """
@@ -107,6 +95,12 @@ class MemoryAgent(BaseUltronAgent):
             except Exception as err:
                 logger.debug(f"[{self.name}] Workspace sync notice for key '{ws_key}': {err}")
 
+            # C. Sync to SemanticMemoryStore for vector similarity ranking
+            try:
+                self.semantic_store.store_memory(key, value)
+            except Exception as err:
+                logger.debug(f"[{self.name}] Semantic store sync notice: {err}")
+
             return {
                 "key": key,
                 "value": value,
@@ -150,31 +144,24 @@ class MemoryAgent(BaseUltronAgent):
 
             mem_data = memory_sys.load_memory()
             exists = key in mem_data
-
             memory_sys.remember(key, value)
-
-            ws_key = f"workspace/{self.agent_id}/memories/{key}"
             try:
-                self.write_workspace(ws_key, value)
-            except Exception as err:
-                logger.debug(f"[{self.name}] Workspace update notice for key '{ws_key}': {err}")
+                self.semantic_store.store_memory(key, value)
+            except Exception:
+                pass
 
             return {
                 "key": key,
                 "value": value,
-                "updated": True,
-                "previously_existed": exists,
+                "updated": exists,
             }
 
         # ---------------------------------------------------------------------
         # 4. DELETE MEMORY
         # ---------------------------------------------------------------------
-        elif action in ["delete_memory", "delete", "remove", "forget"]:
+        elif action in ["delete_memory", "delete", "forget"]:
             key = payload.get("key")
             if not key:
-                if payload.get("clear_all"):
-                    res = memory_sys.clear_memory()
-                    return {"cleared_all": True, "message": res}
                 raise ValueError("delete_memory requires 'key' parameter.")
 
             mem_data = memory_sys.load_memory()
@@ -182,13 +169,6 @@ class MemoryAgent(BaseUltronAgent):
             if existed:
                 del mem_data[key]
                 memory_sys.save_memory(mem_data)
-
-            ws_key = f"workspace/{self.agent_id}/memories/{key}"
-            try:
-                if self.bus and hasattr(self.bus, "delete_workspace"):
-                    self.bus.delete_workspace(ws_key, owner=self.agent_id)
-            except Exception:
-                pass
 
             return {
                 "key": key,
@@ -224,6 +204,24 @@ class MemoryAgent(BaseUltronAgent):
             return {
                 "total_entries": len(mem_data),
                 "memories": mem_data,
+            }
+
+        # ---------------------------------------------------------------------
+        # 7. QUERY SEMANTIC MEMORY & RELEVANCE RANKING
+        # ---------------------------------------------------------------------
+        elif action in ["query_semantic_memory", "rank_relevance", "semantic_search"]:
+            query = payload.get("query") or payload.get("term") or ""
+            top_k = int(payload.get("top_k", 5))
+            min_score = float(payload.get("min_score", 0.05))
+
+            if not query:
+                raise ValueError("query_semantic_memory requires 'query' parameter.")
+
+            results = self.semantic_store.query_semantic_memory(query, top_k=top_k, min_score=min_score)
+            return {
+                "query": query,
+                "count": len(results),
+                "results": results,
             }
 
         else:

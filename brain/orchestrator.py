@@ -143,10 +143,140 @@ def is_ultron_shutdown(command_raw: str, command_clean: str) -> bool:
 class Orchestrator:
     """Central Brain Orchestrator Controller."""
 
+    def __init__(self, bus: Optional[Any] = None, agent_manager: Optional[Any] = None) -> None:
+        from brain.agent_bus import AgentMemoryBus
+        from brain.agent_manager import AgentManager
+        from agents.system_agent import SystemAgent
+        from agents.memory_agent import MemoryAgent
+        from agents.background_task_agent import BackgroundTaskAgent
+        from agents.planning_agent import PlanningAgent
+        from agents.research_agent import ResearchAgent
+        from agents.coding_agent import CodingAgent
+
+        self.bus = bus or AgentMemoryBus()
+        if not getattr(self.bus, "_is_initialized", False):
+            try:
+                self.bus.initialize()
+            except Exception as err:
+                logger.debug(f"[Orchestrator] Bus initialize notice: {err}")
+
+        self.agent_manager = agent_manager or AgentManager(bus=self.bus)
+        if not getattr(self.agent_manager, "_is_initialized", False):
+            try:
+                self.agent_manager.initialize()
+            except Exception as err:
+                logger.debug(f"[Orchestrator] AgentManager initialize notice: {err}")
+
+        # Instantiate & register all 6 domain agents
+        self._system_agent = SystemAgent(bus=self.bus)
+        self._memory_agent = MemoryAgent(bus=self.bus)
+        self._background_agent = BackgroundTaskAgent(bus=self.bus)
+        self._planning_agent = PlanningAgent(bus=self.bus)
+        self._research_agent = ResearchAgent(bus=self.bus)
+        self._coding_agent = CodingAgent(bus=self.bus)
+
+        for agent in [
+            self._system_agent,
+            self._memory_agent,
+            self._background_agent,
+            self._planning_agent,
+            self._research_agent,
+            self._coding_agent,
+        ]:
+            try:
+                self.agent_manager.register_agent(agent)
+            except Exception as err:
+                logger.debug(f"[Orchestrator] Agent registration notice for '{agent.agent_id}': {err}")
+
+    def shutdown(self) -> None:
+        """Shutdown managed agents and bus cleanly."""
+        try:
+            if hasattr(self, "agent_manager") and self.agent_manager:
+                self.agent_manager.shutdown()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "bus") and self.bus:
+                self.bus.shutdown()
+        except Exception:
+            pass
+
+    def _dispatch_to_domain_agent(self, command: str, original: str) -> Optional[str]:
+        """Dispatch user request to appropriate registered domain agent if intent matches."""
+        cmd = command.lower().strip()
+        orig = original.lower().strip()
+        t_id = f"task_{int(time.time() * 1000)}"
+
+        # 1. Research Agent Intent
+        if cmd.startswith("research ") or orig.startswith("research ") or "conduct research on" in cmd or "investigate topic" in cmd:
+            query = cmd.replace("research", "").replace("conduct research on", "").replace("investigate topic", "").strip()
+            res = self.agent_manager.dispatch_task("research_agent", t_id, {
+                "action": "conduct_research",
+                "query": query or orig,
+            })
+            if res.get("status") == "SUCCESS":
+                summary = res.get("result", {}).get("synthesis", {}).get("summary", "")
+                if summary:
+                    return f"Research complete Boss: {summary}"
+                return f"Research completed for query: {query}"
+            elif res.get("status") == "ERROR":
+                return f"Research task notice: {res.get('error')}"
+
+        # 2. Coding Agent Intent
+        if cmd.startswith("coding ") or "inspect repo" in cmd or "generate python code" in cmd or "run authorized tests" in cmd:
+            action = "understand_repo_structure"
+            if "generate python code" in cmd:
+                action = "generate_code"
+            elif "run authorized tests" in cmd:
+                action = "run_authorized_tests"
+            res = self.agent_manager.dispatch_task("coding_agent", t_id, {
+                "action": action,
+                "specification": cmd,
+                "root_path": os.getcwd(),
+            })
+            if res.get("status") == "SUCCESS":
+                return f"Coding Agent operation completed successfully."
+            elif res.get("status") == "ERROR":
+                return f"Coding Agent notice: {res.get('error')}"
+
+        # 3. Planning Agent Intent
+        if "create execution plan" in cmd or "build plan for" in cmd or cmd.startswith("plan "):
+            obj = cmd.replace("create execution plan", "").replace("build plan for", "").replace("plan", "").strip()
+            res = self.agent_manager.dispatch_task("planning_agent", t_id, {
+                "action": "create_execution_plan",
+                "objective": obj or orig,
+            })
+            if res.get("status") == "SUCCESS":
+                p_id = res.get("result", {}).get("plan_id", "")
+                steps = len(res.get("result", {}).get("steps", []))
+                return f"Plan '{p_id}' created with {steps} execution steps Boss."
+
+        # 4. Background Task Agent Intent
+        if "submit background task" in cmd or "run async job" in cmd:
+            res = self.agent_manager.dispatch_task("background_task_agent", t_id, {
+                "action": "submit_task",
+                "task_name": "AsyncJob",
+                "payload": {"command": orig},
+            })
+            if res.get("status") == "SUCCESS":
+                bg_id = res.get("result", {}).get("task_id", "")
+                return f"Background task '{bg_id}' submitted successfully Boss."
+
+        # 5. System Agent Intent
+        if "agent status" in cmd or "check agent health" in cmd or "system diagnostics" in cmd:
+            res = self.agent_manager.dispatch_task("system_agent", t_id, {
+                "action": "get_system_status",
+            })
+            if res.get("status") == "SUCCESS":
+                agents_count = len(self.agent_manager.list_agents())
+                return f"All {agents_count} domain agents are healthy and operational Boss."
+
+        return None
+
     def process_command(self, original_command: str) -> str:
         """
         Master input execution pipeline:
-        Input -> Security/Memory -> Skill / Intent / Router -> LLM Fallback -> Response
+        Input -> Security/Memory -> Domain Agent / Skill / Intent -> LLM Fallback -> Response
         """
         if not original_command:
             return "Waiting Boss"
@@ -347,6 +477,12 @@ class Orchestrator:
                 session.enter_sleep()
                 event_bus.publish(event_bus.TASK_FINISHED, command=original)
                 return "Voice verification failed. Entering sleep mode."
+
+        # 0D. DOMAIN AGENT DISPATCH VIA CENTRAL AGENT MANAGER
+        agent_res = self._dispatch_to_domain_agent(command, original)
+        if agent_res is not None:
+            event_bus.publish(event_bus.TASK_FINISHED, command=original)
+            return agent_res
 
         # 1. SMART MEMORY EXTRACTION
         memory_result = extract_memory(original)
