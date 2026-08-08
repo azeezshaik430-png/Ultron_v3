@@ -1,89 +1,47 @@
 """
 ULTRON V3
 Volume Control
+
+Cross-platform: delegates all audio operations to the platform adapter.
+
+Windows: uses pycaw (Windows COM audio endpoint) via WindowsAdapter
+Linux:   uses pactl (PulseAudio/PipeWire) or amixer (ALSA) via LinuxAdapter
 """
 
-from ctypes import POINTER, cast
-from comtypes import CLSCTX_ALL
-from pycaw.pycaw import (
-    AudioUtilities,
-    IAudioEndpointVolume
-)
+import ultron_platform
 
 
-def get_volume():
+def _adapter():
+    return ultron_platform.get_platform_adapter()
 
-    devices = AudioUtilities.GetSpeakers()
 
-    interface = devices.Activate(
-        IAudioEndpointVolume._iid_,
-        CLSCTX_ALL,
-        None
-    )
-
-    return cast(
-        interface,
-        POINTER(IAudioEndpointVolume)
-    )
+def _result_str(result: dict, fallback: str) -> str:
+    """Extract the user-facing string from an adapter result dict."""
+    if result.get("available"):
+        return result.get("result") or fallback
+    reason = result.get("reason", "Audio control unavailable on this platform.")
+    return f"Cannot control volume: {reason}"
 
 
 def volume_up():
-
-    volume = get_volume()
-
-    current = volume.GetMasterVolumeLevelScalar()
-
-    current = min(current + 0.1, 1.0)
-
-    volume.SetMasterVolumeLevelScalar(current, None)
-
-    return "Volume increased Boss."
+    return _result_str(_adapter().volume_up(step=0.1), "Volume increased Boss.")
 
 
 def volume_down():
-
-    volume = get_volume()
-
-    current = volume.GetMasterVolumeLevelScalar()
-
-    current = max(current - 0.1, 0.0)
-
-    volume.SetMasterVolumeLevelScalar(current, None)
-
-    return "Volume decreased Boss."
+    return _result_str(_adapter().volume_down(step=0.1), "Volume decreased Boss.")
 
 
 def mute():
-
-    volume = get_volume()
-
-    volume.SetMute(1, None)
-
-    return "Volume muted Boss."
+    return _result_str(_adapter().mute(), "Volume muted Boss.")
 
 
 def unmute():
-
-    volume = get_volume()
-
-    volume.SetMute(0, None)
-
-    return "Volume unmuted Boss."
+    return _result_str(_adapter().unmute(), "Volume unmuted Boss.")
 
 
 def max_volume():
-
-    volume = get_volume()
-
-    volume.SetMasterVolumeLevelScalar(1.0, None)
-
-    return "Maximum volume activated Boss."
+    return _result_str(_adapter().set_volume(1.0), "Maximum volume activated Boss.")
 
 
 def min_volume():
-
-    volume = get_volume()
-
-    volume.SetMasterVolumeLevelScalar(0.0, None)
-
-    return "Minimum volume activated Boss."
+    return _result_str(_adapter().set_volume(0.0), "Minimum volume activated Boss.")

@@ -1,0 +1,19 @@
+# ULTRON V3 - Linux-Specific Requirements
+# Install in addition to requirements.txt on Linux systems.
+#
+# Usage:
+#   pip install -r requirements.txt
+#   pip install -r requirements_linux.txt
+#
+# System packages (install via apt/dnf/pacman, NOT pip):
+#   sudo apt install wmctrl xdg-utils pulseaudio-utils alsa-utils
+#   (wmctrl     — optional, for window management via LinuxAdapter.focus_window)
+#   (xdg-utils  — provides xdg-open for file/path opening)
+#   (pulseaudio-utils — provides pactl for volume control)
+#   (alsa-utils  — provides amixer as fallback volume control)
+#
+# Python packages (optional X11/window support):
+python-xlib; sys_platform == "linux"
+
+# NOTE: pycaw, comtypes, pygetwindow, and pyaudio are NOT required on Linux.
+# The LinuxAdapter uses system utilities (pactl/amixer/xdg-open) instead.

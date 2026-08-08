@@ -1,37 +1,52 @@
 """
 ULTRON V3
-Windows Control Skill
+System Session Control Skill
+
+Cross-platform: session control operations (shutdown, restart, lock, sleep,
+sign-out, settings) are delegated to the platform adapter. All existing
+ULTRON security guards are preserved unchanged.
+
+SECURITY INVARIANTS (preserved from original):
+    - shutdown_pc() has strict token-based internal authorization.
+    - Token must exist, match action, be validated, and be unexpired.
+    - Token is consumed (cleared) immediately before OS execution.
+    - Replay protection is maintained.
+    - Security violations are logged to security.log.
+    - restart_pc() requires explicit confirmed=True in caller payload
+      (enforced by SystemAgent._do_execute_task).
 """
 
 import os
-import subprocess
+import datetime
+import time
+import ultron_platform
 
+
+def _adapter():
+    return ultron_platform.get_platform_adapter()
 
 
 def lock_pc():
-
-    os.system(
-        "rundll32.exe user32.dll,LockWorkStation"
-    )
-
-    return "Locking computer Boss."
-
+    result = _adapter().lock()
+    if result.get("available"):
+        return result.get("result", "Locking computer Boss.")
+    reason = result.get("reason", "Lock not supported on this platform.")
+    return f"Cannot lock: {reason}"
 
 
 def open_settings():
-
-    os.system(
-        "start ms-settings:"
-    )
-
-    return "Opening Windows Settings."
-
+    result = _adapter().open_settings()
+    if result.get("available"):
+        return result.get("result", "Opening system settings.")
+    reason = result.get("reason", "Settings panel not available on this platform.")
+    return f"Cannot open settings: {reason}"
 
 
 def shutdown_pc():
     """
-    Execute Windows OS Shutdown sequence.
-    STRICT TOKEN-BASED INTERNAL AUTHORIZATION SECURITY GUARD:
+    Execute OS Shutdown sequence.
+
+    STRICT TOKEN-BASED INTERNAL AUTHORIZATION SECURITY GUARD (PRESERVED):
     Verifies internally that:
     1. session.pending_confirmation exists
     2. pending_confirmation.action == 'shutdown_pc'
@@ -41,8 +56,6 @@ def shutdown_pc():
     from core.session import session
     from core.logger import logger
     from core.config import config
-    import datetime
-    import time
 
     now = time.time()
     pending = session.pending_confirmation
@@ -72,58 +85,64 @@ def shutdown_pc():
             is_unexpired = True
 
     if not (pending and is_valid_action and is_validated and is_unexpired):
-        logger.error("SECURITY VIOLATION: Execution path attempted to call shutdown_pc() without valid token authorization!")
+        logger.error(
+            "SECURITY VIOLATION: Execution path attempted to call shutdown_pc() "
+            "without valid token authorization!"
+        )
         try:
             log_dir = config.LOGS_DIR
             os.makedirs(log_dir, exist_ok=True)
             sec_log_path = os.path.join(log_dir, "security.log")
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cmd_str = pending.get("command", "shutdown_pc") if pending and isinstance(pending, dict) else "shutdown_pc"
-            entry = f"[{timestamp}] Command: '{cmd_str}' | Status: 'Unauthorized Shutdown Blocked'\n"
+            cmd_str = (
+                pending.get("command", "shutdown_pc")
+                if pending and isinstance(pending, dict)
+                else "shutdown_pc"
+            )
+            entry = (
+                f"[{timestamp}] Command: '{cmd_str}' | "
+                f"Status: 'Unauthorized Shutdown Blocked'\n"
+            )
             with open(sec_log_path, "a", encoding="utf-8") as f:
                 f.write(entry)
         except Exception:
             pass
         return "Security block: Unauthorized Shutdown Blocked"
 
-    # REPLAY PROTECTION: Completely destroy token confirmation object IMMEDIATELY before executing OS shutdown
+    # REPLAY PROTECTION: Completely destroy token confirmation object IMMEDIATELY
+    # before executing OS shutdown.
     session.clear_pending_confirmation()
 
-    os.system(
-        "shutdown /s /t 5"
-    )
-
-    return "Shutting down computer Boss."
-
+    result = _adapter().shutdown(delay_sec=5)
+    if result.get("available"):
+        return result.get("result", "Shutting down computer Boss.")
+    reason = result.get("reason", "Shutdown not supported on this platform.")
+    return f"Cannot shutdown: {reason}"
 
 
 def restart_pc():
-
-    os.system(
-        "shutdown /r /t 5"
-    )
-
-    return "Restarting computer Boss."
-
+    result = _adapter().restart(delay_sec=5)
+    if result.get("available"):
+        return result.get("result", "Restarting computer Boss.")
+    reason = result.get("reason", "Restart not supported on this platform.")
+    return f"Cannot restart: {reason}"
 
 
 def sign_out_pc():
-    """Sign out of Windows session."""
-    os.system("shutdown /l")
-    return "Signing out Boss."
+    """Sign out of the current user session."""
+    result = _adapter().sign_out()
+    if result.get("available"):
+        return result.get("result", "Signing out Boss.")
+    reason = result.get("reason", "Sign-out not supported on this platform.")
+    return f"Cannot sign out: {reason}"
 
 
 def sleep_pc():
-
-    subprocess.run(
-        [
-            "rundll32.exe",
-            "powrprof.dll,SetSuspendState",
-            "0,1,0"
-        ]
-    )
-
-    return "Going to sleep mode Boss."
+    result = _adapter().sleep()
+    if result.get("available"):
+        return result.get("result", "Going to sleep mode Boss.")
+    reason = result.get("reason", "Sleep not supported on this platform.")
+    return f"Cannot sleep: {reason}"
 
 
 # ==========================================

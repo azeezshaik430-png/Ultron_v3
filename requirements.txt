@@ -1,9 +1,27 @@
+# ULTRON V3 - Universal Requirements
+# These packages are required on ALL platforms.
+
+# Speech & Audio I/O (cross-platform)
 speechrecognition
+sounddevice
+scipy
+
+# TTS (cross-platform — uses SAPI5 on Windows, espeak on Linux)
 pyttsx3
-pyautogui
+
+# Process management (cross-platform)
 psutil
-pywin32
+
+# HTTP client for LLM API
 requests
-rapidfuzz
 ollama
-pyaudio
+
+# Fuzzy string matching
+rapidfuzz
+
+# Voice authentication
+resemblyzer
+numpy
+
+# Testing
+pytest

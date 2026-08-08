@@ -1,0 +1,19 @@
+# ULTRON V3 - Windows-Specific Requirements
+# Install in addition to requirements.txt on Windows systems.
+#
+# Usage:
+#   pip install -r requirements.txt
+#   pip install -r requirements_windows.txt
+
+# Windows COM audio control (volume_control.py via WindowsAdapter)
+pycaw
+comtypes
+
+# Windows window management (app_control.py focus_window via WindowsAdapter)
+pygetwindow
+
+# Windows system APIs (pywin32 — available for future Windows-specific features)
+pywin32
+
+# Windows audio I/O alternative
+pyaudio

@@ -1,21 +1,23 @@
 """
 ULTRON V3
 Smart Application Scanner
+
+Cross-platform: uses platform adapter for OS-specific search locations and
+executable extension. The scanning logic itself is platform-neutral.
 """
 
 import os
 import json
+import ultron_platform
 from core.config import config
 from core.logger import logger
 
 
 APP_DATABASE = config.get_data_path("apps.json")
 
-SEARCH_LOCATIONS = [
-    r"C:\Program Files",
-    r"C:\Program Files (x86)",
-    r"C:\Users\AZEEZ\AppData\Local",
-]
+
+def _adapter():
+    return ultron_platform.get_platform_adapter()
 
 
 def load_apps():
@@ -37,16 +39,33 @@ def save_apps(apps):
 
 
 def scan_apps():
+    """
+    Scan platform-appropriate directories for installed applications.
+    Uses the platform adapter to determine search locations and executable
+    extension rather than hardcoding Windows-specific paths.
+    """
+    adapter = _adapter()
+    search_locations = adapter.get_app_search_locations()
+    ext = adapter.get_executable_extension()
+
     apps = {}
-    for location in SEARCH_LOCATIONS:
+    for location in search_locations:
         if not os.path.exists(location):
             continue
         for root, dirs, files in os.walk(location):
             for file in files:
-                if file.lower().endswith(".exe"):
-                    name = file[:-4].lower()
-                    path = os.path.join(root, file)
-                    apps[name] = path
+                file_lower = file.lower()
+                if ext:
+                    if file_lower.endswith(ext):
+                        name = file[: -len(ext)].lower()
+                        path = os.path.join(root, file)
+                        apps[name] = path
+                else:
+                    if "." not in file or file_lower.endswith((".sh", ".bin", ".run")):
+                        full_path = os.path.join(root, file)
+                        if os.access(full_path, os.X_OK):
+                            name = file.lower()
+                            apps[name] = full_path
     return apps
 
 

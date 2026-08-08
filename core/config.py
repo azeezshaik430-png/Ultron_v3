@@ -82,7 +82,11 @@ class Config:
     FEATURE_FLAGS_VERSION: int = 1
     AGENT_BUS_DEFAULT_TTL_MS: int = 30000
     AGENT_BUS_MAX_QUEUE_SIZE: int = 500
-    AGENT_BUS_ARTIFACTS_DIR: str = "data/artifacts"
+    AGENT_BUS_ARTIFACTS_DIR: str = field(
+        default_factory=lambda: os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "artifacts"
+        )
+    )
 
     # Health Monitor Settings
     HEALTH_MONITOR_INSPECTION_INTERVAL: float = 5.0
@@ -106,7 +110,11 @@ class Config:
     ARTIFACT_MAX_STORAGE_MB: int = 2000
 
     # Recovery Journal, Garbage Collector & Metrics Settings
-    RECOVERY_JOURNAL_PATH: str = "data/bus_journal.log"
+    RECOVERY_JOURNAL_PATH: str = field(
+        default_factory=lambda: os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "bus_journal.log"
+        )
+    )
     RECOVERY_CHECKPOINT_INTERVAL: float = 60.0
     GC_INTERVAL: float = 30.0
     GC_MAX_BATCH: int = 500
