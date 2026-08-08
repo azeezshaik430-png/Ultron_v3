@@ -117,6 +117,18 @@ class Config:
     SERVICE_SHUTDOWN_TIMEOUT: float = 10.0
     SERVICE_HEALTH_INTERVAL: float = 5.0
 
+    # Phase 2B Agent Manager Settings
+    AGENT_MANAGER_VERSION: int = 1
+    AGENT_EXECUTION_TIMEOUT: float = 30.0
+    SYSTEM_AGENT_ENABLED: bool = True
+    MEMORY_AGENT_ENABLED: bool = True
+    TASK_AGENT_ENABLED: bool = True
+    PLANNING_AGENT_ENABLED: bool = True
+    RESEARCH_AGENT_ENABLED: bool = True
+    CODING_AGENT_ENABLED: bool = True
+    VISION_AGENT_ENABLED: bool = True
+    BROWSER_AGENT_ENABLED: bool = True
+
 
 # Instantiated global singleton
 config = Config()

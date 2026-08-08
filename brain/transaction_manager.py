@@ -61,8 +61,8 @@ class TransactionManager(IService):
         # Telemetry metrics counters
         self._total_committed = 0
         self._total_rolled_back = 0
-        self._total_conflicts = 0
-        self._total_expired = 0
+        self._conflict_count = 0
+        self._expired_count = 0
         self._total_commit_time_ms = 0.0
         self._is_initialized = False
 
