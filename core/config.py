@@ -30,6 +30,9 @@ class Config:
     LANGUAGE: str = "en"
     AUDIO_SAMPLE_RATE: int = 16000
     AUDIO_RECORD_DURATION: int = 5
+    VOICE_AUTH_ENABLED: bool = field(
+        default_factory=lambda: os.getenv("VOICE_AUTH_ENABLED", "true").lower() in ["true", "1", "yes"]
+    )
 
     # Path Settings
     BASE_DIR: str = field(

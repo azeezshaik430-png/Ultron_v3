@@ -52,9 +52,23 @@ def wait_for_wake_word() -> bool:
                 t_wake_detected = time.perf_counter()
                 logger.info("Wake word detected")
 
+                from voice.speech_output import speak
+
                 # REQUIREMENT 1: Check session.is_authenticated BEFORE any audio recording or verification
                 if session.is_authenticated:
                     logger.info("Session already authenticated. Immediately entering Active Mode.")
+                    speak("What can I do for you, Boss?")
+                    return True
+
+                # DEVELOPMENT-ONLY BYPASS CHECK
+                from core.config import config
+                if not getattr(config, "VOICE_AUTH_ENABLED", True):
+                    logger.warning("==================================================")
+                    logger.warning("⚠️ [DEV MODE] Voice authentication BYPASSED (VOICE_AUTH_ENABLED=false)")
+                    logger.warning("   Access Granted for manual testing.")
+                    logger.warning("==================================================")
+                    session.set_auth(True)
+                    speak("What can I do for you, Boss?")
                     return True
 
                 # INITIAL VOICE AUTHENTICATION (Runs ONLY ONCE per app launch)
@@ -80,6 +94,7 @@ def wait_for_wake_word() -> bool:
                 if verified:
                     session.set_auth(True)
                     logger.info("Boss Verified. Access Granted.")
+                    speak("What can I do for you, Boss?")
                     return True
                 else:
                     logger.warning("Unknown voice detected. Access Denied. Returning to sleep...")

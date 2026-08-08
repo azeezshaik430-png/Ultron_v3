@@ -103,6 +103,11 @@ def _get_boss_embedding() -> Optional[np.ndarray]:
 
 def verify_boss(test_voice: str) -> bool:
     """Verify speaker against registered boss_voice.wav with telemetry performance tracking."""
+    from core.config import config
+    if not getattr(config, "VOICE_AUTH_ENABLED", True):
+        logger.warning("[VoiceGuard] ⚠️ [DEV MODE] Voice authentication bypassed via VOICE_AUTH_ENABLED=false.")
+        return True
+
     t_start = time.perf_counter()
     if not os.path.exists(BOSS_VOICE):
         logger.warning("Boss voice sample missing! Prompting voice registration...")

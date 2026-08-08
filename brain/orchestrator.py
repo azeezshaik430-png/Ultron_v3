@@ -262,14 +262,49 @@ class Orchestrator:
                 bg_id = res.get("result", {}).get("task_id", "")
                 return f"Background task '{bg_id}' submitted successfully Boss."
 
-        # 5. System Agent Intent
+        # 4B. Language Switch Intent
+        telugu_triggers = ["speak in telugu", "telugu lo matladu", "తెలుగులో మాట్లాడు", "తెలుగులో చెప్పు", "answer in telugu", "can you speak telugu"]
+        english_triggers = ["speak in english", "english lo matladu", "switch to english", "answer in english"]
+        
+        if any(k in cmd or k in orig for k in telugu_triggers):
+            session.preferred_language = "te"
+            return "నేను తెలుగులో మాట్లాడగలను. మీకు ఎలా సహాయపడగలను?"
+        elif any(k in cmd or k in orig for k in english_triggers):
+            session.preferred_language = "en"
+            return "Switched to English mode."
+
+        # 5. System & Storage Agent Intent
+        storage_triggers = ["d drive", "c drive", "tell about d drive", "tell about c drive", "disk status", "storage status", "d: drive", "c: drive", "my storage", "my disk"]
+        if any(k in cmd for k in storage_triggers):
+            target_drive = "D" if ("d drive" in cmd or "d:" in cmd or "d_drive" in cmd) else ("C" if ("c drive" in cmd or "c:" in cmd) else None)
+            res = self.agent_manager.dispatch_task("system_agent", t_id, {
+                "action": "disk_info",
+                "drive": target_drive,
+            })
+            if res.get("status") == "SUCCESS":
+                return res.get("result", "")
+
+        sys_info_triggers = [
+            "tell my system", "tell me my system", "what is my system", "tell system", "my system",
+            "system details", "system info", "system information", "system specs", "system specifications",
+            "hardware info", "hardware details", "my hardware", "tell me my hardware",
+            "cpu and ram", "my cpu", "my gpu", "tell me my cpu", "tell me my gpu",
+            "pc specs", "computer specs", "computer specifications", "my computer details", "specs"
+        ]
+        if any(k in cmd for k in sys_info_triggers) or (("system" in cmd or "hardware" in cmd or "specs" in cmd) and any(w in cmd for w in ["tell", "what", "my", "info", "details", "get"])):
+            res = self.agent_manager.dispatch_task("system_agent", t_id, {
+                "action": "system_info",
+            })
+            if res.get("status") == "SUCCESS":
+                return res.get("result", "")
+
         if "agent status" in cmd or "check agent health" in cmd or "system diagnostics" in cmd:
             res = self.agent_manager.dispatch_task("system_agent", t_id, {
                 "action": "system_status",
             })
             if res.get("status") == "SUCCESS":
                 agents_count = len(self.agent_manager.list_agents())
-                return f"All {agents_count} domain agents are healthy and operational Boss."
+                return f"All {agents_count} domain agents are healthy and operational."
 
         return None
 
@@ -564,6 +599,11 @@ class Orchestrator:
             return res
 
         # 3. SYSTEM & DIAGNOSTICS
+        if any(k in command for k in ["d drive", "c drive", "tell about d drive", "tell about c drive", "disk status", "storage status", "d: drive", "c: drive", "my storage", "my disk"]):
+            target = "D" if ("d drive" in command or "d:" in command) else ("C" if ("c drive" in command or "c:" in command) else None)
+            return system_control.get_disk_info(target)
+        if any(k in command for k in ["tell my system", "tell me my system", "what is my system", "system details", "system info", "system information", "system specs", "hardware info", "hardware details", "cpu and ram", "my hardware"]):
+            return system_control.get_system_info()
         if "system status" in command or command == "status":
             return system_status()
         if "battery" in command:

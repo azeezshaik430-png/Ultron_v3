@@ -134,7 +134,14 @@ class SystemAgent(BaseUltronAgent):
         elif action in ["get_battery", "battery"]:
             return system_control.get_battery()
 
-        elif action in ["system_status", "status", "system_info", "get_system_status"]:
+        elif action in ["system_info", "hardware_info", "get_hardware_info", "system_details", "specs", "hardware"]:
+            return system_control.get_system_info()
+
+        elif action in ["disk_info", "storage_info", "d_drive", "c_drive", "get_disk_info"]:
+            drive = payload.get("drive") or payload.get("target") or ("D" if "d_drive" in action else ("C" if "c_drive" in action else None))
+            return system_control.get_disk_info(drive)
+
+        elif action in ["system_status", "status", "get_system_status"]:
             return system_control.system_status()
 
         # --- FILE OPERATIONS ---

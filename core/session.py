@@ -24,6 +24,7 @@ class SessionManager:
         self.current_agent: Optional[str] = None
         self.session_data: Dict[str, Any] = {}
         self.pending_confirmation: Optional[Dict[str, Any]] = None
+        self.preferred_language: str = "en"
 
     def set_auth(self, status: bool) -> None:
         """Set voice authentication state in memory (Thread-safe)."""

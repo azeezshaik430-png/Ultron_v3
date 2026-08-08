@@ -6,8 +6,10 @@ speechrecognition
 sounddevice
 scipy
 
-# TTS (cross-platform — uses SAPI5 on Windows, espeak on Linux)
+# TTS (cross-platform — SAPI5 for English, Piper ONNX for Telugu)
 pyttsx3
+piper-tts
+onnxruntime
 
 # Process management (cross-platform)
 psutil
