@@ -367,8 +367,8 @@ class TestSubMilestone2B4(unittest.TestCase):
         self.coding_agent.initialize()
         unauthorized_path = "/etc/shadow_unauthorized_test"
 
-        # Mock ACL permission denial
-        self.bus.workspace_acl.revoke_permission("*", self.coding_agent.agent_id)
+        # Grant permission on path to system owner so key permissions exist and coding_agent is ungranted
+        self.bus.workspace_acl.grant_permission(unauthorized_path, "system", AccessTier.OWNER)
 
         res = self.coding_agent.execute_task("task_code_09", {
             "action": "inspect_project_files",

@@ -175,6 +175,12 @@ class AgentMemoryBus(IService):
         """Grant ACL permission tier to a subagent for a workspace key."""
         self.workspace_acl.grant_permission(key, agent_id, access_tier, task_id=task_id)
 
+    def check_permission(self, key: str, agent_id: str, access_tier: AccessTier) -> bool:
+        """Check if an agent has the required ACL access tier for a workspace key."""
+        from brain.workspace_acl import PermissionType
+        perm_type = PermissionType.WRITE if access_tier in [AccessTier.OWNER] else PermissionType.READ
+        return self.workspace_acl.validate_access(key, agent_id, perm_type)
+
     def create_workspace_snapshot(self, created_by: str = "system", description: str = "") -> Dict[str, Any]:
         """Create a deep workspace snapshot."""
         return self.workspace_store.create_snapshot(created_by=created_by, description=description)
