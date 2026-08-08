@@ -303,6 +303,8 @@ class TestSubMilestone2B5(unittest.TestCase):
 
     def test_30_full_2b_regression(self) -> None:
         """Verify full Orchestrator pipeline handles commands cleanly across agents."""
+        from core.session import session
+        session.preferred_language = "en"
         res1 = orchestrator.process_command("What is Java?")
         self.assertIn("java", res1.lower())
 

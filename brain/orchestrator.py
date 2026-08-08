@@ -6,6 +6,7 @@ All user inputs flow strictly through Orchestrator -> Intent -> Planner -> Route
 
 import time
 import webbrowser
+import urllib.parse
 from typing import Optional, Dict, Any
 
 from core.logger import logger
@@ -362,7 +363,7 @@ class Orchestrator:
             "open ", "go to ", "navigate to ", "visit ", "search for ",
             "read ", "inspect ", "close "
         ]
-        browser_suffixes = ["open cheyyi", "close cheyyi", "open chey", "close chey", "open cheyyandi", "close cheyyandi"]
+        browser_suffixes = ["open cheyyi", "close cheyyi", "open chey", "close chey", "open cheyyandi", "close cheyyandi", "search cheyyi", "search chey"]
         
         is_browser_command = False
         target_url = orig
@@ -382,6 +383,44 @@ class Orchestrator:
                     target_url = target_url[:-len(strip_suffix)].strip()
                     break
             
+            # 1. Handle "Open Brave" Conversational Trigger
+            if target_url == "brave":
+                session.session_data["browser_state"] = "WAITING_FOR_WEBSITE"
+                res = self.agent_manager.dispatch_task("browser_agent", t_id, {
+                    "action": "open_url",
+                    "url": "about:blank",
+                })
+                current_lang = getattr(session, "preferred_language", "en")
+                if current_lang == "te":
+                    return "ఏ website open చేయాలి Boss?"
+                return "What website would you like me to open, Boss?"
+
+            # 2. Handle One-Shot Searches (e.g., "open youtube and search ai agents")
+            searchable_sites = ["youtube", "google", "github", "twitter", "x"]
+            for site in searchable_sites:
+                one_shot_en = f"{site} and search "
+                one_shot_te = f"{site} lo "
+                if one_shot_en in target_url:
+                    query = target_url.split(one_shot_en)[-1].strip()
+                    if site == "youtube":
+                        target_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}"
+                    elif site == "google":
+                        target_url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
+                    else:
+                        target_url = f"https://www.google.com/search?q=site:{site}.com+{urllib.parse.quote_plus(query)}"
+                    is_browser_command = True
+                    break
+                elif one_shot_te in orig and " search cheyyi" in orig:
+                    query = orig.split(one_shot_te)[-1].split(" search cheyyi")[0].strip()
+                    if site == "youtube":
+                        target_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}"
+                    elif site == "google":
+                        target_url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
+                    else:
+                        target_url = f"https://www.google.com/search?q=site:{site}.com+{urllib.parse.quote_plus(query)}"
+                    is_browser_command = True
+                    break
+
             if target_url in KNOWN_WEBSITES:
                 is_browser_command = True
                 target_url = KNOWN_WEBSITES[target_url]
@@ -422,8 +461,15 @@ class Orchestrator:
                     
                 if b_action == "open_url":
                     logger.info("[BrowserAgent] Navigation successful")
-                    return f"{inner.get('title', target_url)} is open, Boss."
+                    title = inner.get('title', target_url)
+                    current_lang = getattr(session, "preferred_language", "en")
+                    if current_lang == "te":
+                        return f"{title} ఓపెన్ చేశాను, Boss."
+                    return f"{title} is open, Boss."
                 elif b_action == "close_browser":
+                    current_lang = getattr(session, "preferred_language", "en")
+                    if current_lang == "te":
+                        return "బ్రౌజర్ క్లోజ్ చేశాను బాస్."
                     return "The browser has been closed."
                 return res_msg
             elif res.get("reason"):
@@ -646,6 +692,8 @@ class Orchestrator:
                 sd.stop()
             except Exception:
                 pass
+            session.session_data.pop("browser_state", None)
+            session.session_data.pop("browser_target", None)
             session.reset()
             event_bus.publish(event_bus.TASK_FINISHED, command=original)
             return "Goodbye Boss. Shutting down ULTRON."
@@ -655,6 +703,8 @@ class Orchestrator:
             logger.info("Executing Security Logout & Sleep Sequence...")
             session.set_auth(False)
             stop_speaking()
+            session.session_data.pop("browser_state", None)
+            session.session_data.pop("browser_target", None)
             session.enter_sleep()
             event_bus.publish(event_bus.TASK_FINISHED, command=original)
             return "ULTRON locked Boss. Session logged out."
@@ -673,6 +723,121 @@ class Orchestrator:
                 session.enter_sleep()
                 event_bus.publish(event_bus.TASK_FINISHED, command=original)
                 return "Voice verification failed. Entering sleep mode."
+
+        import urllib.parse
+        # 0F. CONVERSATIONAL BROWSER STATE MACHINE
+        browser_state = session.session_data.get("browser_state")
+        
+        # Check if the command is an explicit top-level command that should override pending state.
+        # This prevents "open whatsapp" or "close youtube" from being treated as a search query.
+        is_explicit_override = False
+        if browser_state:
+            override_triggers = ["open ", "close ", "lock ", "shutdown ", "restart "]
+            if any(original.startswith(k) for k in override_triggers):
+                is_explicit_override = True
+                logger.info(f"Explicit command '{original}' overriding pending browser state.")
+                session.session_data.pop("browser_state", None)
+                session.session_data.pop("browser_target", None)
+                browser_state = None
+
+        if browser_state:
+            # Check for cancellation
+            cancel_triggers = ["cancel", "never mind", "stop", "vaddu", "cancel cheyyi"]
+            if any(k in original for k in cancel_triggers):
+                session.session_data.pop("browser_state", None)
+                session.session_data.pop("browser_target", None)
+                event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                return "Cancelled, Boss." if current_lang != "te" else "క్యాన్సిల్ చేశాను బాస్."
+
+            if browser_state == "WAITING_FOR_WEBSITE":
+                target_url = original
+                # KNOWN_WEBSITES is duplicated here for quick resolution
+                KNOWN_WEBSITES = {
+                    "youtube": "https://www.youtube.com",
+                    "whatsapp": "https://web.whatsapp.com",
+                    "google": "https://www.google.com",
+                    "gmail": "https://mail.google.com",
+                    "github": "https://github.com",
+                    "instagram": "https://www.instagram.com",
+                    "facebook": "https://www.facebook.com",
+                    "twitter": "https://twitter.com",
+                    "x": "https://x.com",
+                    "linkedin": "https://www.linkedin.com",
+                    "chatgpt": "https://chatgpt.com",
+                    "google ai studio": "https://aistudio.google.com",
+                }
+                
+                # Check for direct match
+                resolved_key = None
+                for key in KNOWN_WEBSITES:
+                    if key in original:
+                        resolved_key = key
+                        break
+                        
+                if not resolved_key:
+                    # Invalid input, clear state
+                    session.session_data.pop("browser_state", None)
+                    session.session_data.pop("browser_target", None)
+                    event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                    return "I don't recognize that website. Navigation cancelled." if current_lang != "te" else "ఆ వెబ్‌సైట్ నాకు తెలియదు. క్యాన్సిల్ చేశాను."
+                    
+                target_url = KNOWN_WEBSITES[resolved_key]
+                t_id = f"task_{int(time.time() * 1000)}"
+                res = self.agent_manager.dispatch_task("browser_agent", t_id, {
+                    "action": "open_url",
+                    "url": target_url,
+                })
+                
+                if res.get("status") == "SUCCESS" and res.get("result", {}).get("status") != "ERROR":
+                    searchable = ["youtube", "google", "github", "x", "twitter"]
+                    if resolved_key in searchable:
+                        session.session_data["browser_state"] = "WAITING_FOR_SEARCH_QUERY"
+                        session.session_data["browser_target"] = resolved_key
+                        event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                        if current_lang == "te":
+                            return f"{resolved_key.capitalize()} లో ఏం search చేయాలి Boss?"
+                        return f"What would you like me to search for on {resolved_key.capitalize()}, Boss?"
+                    else:
+                        session.session_data.pop("browser_state", None)
+                        session.session_data.pop("browser_target", None)
+                        event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                        title = res.get("result", {}).get("title", resolved_key.capitalize())
+                        return f"{title} is open, Boss." if current_lang != "te" else f"{title} ఓపెన్ చేశాను, Boss."
+                else:
+                    session.session_data.pop("browser_state", None)
+                    session.session_data.pop("browser_target", None)
+                    event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                    return f"I couldn't open {resolved_key.capitalize()} because {res.get('reason', res.get('result', {}).get('reason', 'unknown error'))}"
+                    
+            elif browser_state == "WAITING_FOR_SEARCH_QUERY":
+                target_site = session.session_data.get("browser_target")
+                query = urllib.parse.quote_plus(original)
+                
+                search_url = ""
+                if target_site == "youtube":
+                    search_url = f"https://www.youtube.com/results?search_query={query}"
+                elif target_site == "google":
+                    search_url = f"https://www.google.com/search?q={query}"
+                elif target_site in ["github", "twitter", "x"]:
+                    # Adjust if needed, fallback to basic google search if unknown
+                    search_url = f"https://www.google.com/search?q=site:{target_site}.com+{query}"
+                    
+                t_id = f"task_{int(time.time() * 1000)}"
+                res = self.agent_manager.dispatch_task("browser_agent", t_id, {
+                    "action": "open_url",
+                    "url": search_url,
+                })
+                
+                session.session_data.pop("browser_state", None)
+                session.session_data.pop("browser_target", None)
+                event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                
+                if res.get("status") == "SUCCESS" and res.get("result", {}).get("status") != "ERROR":
+                    if current_lang == "te":
+                        return "వెతుకుతున్నాను బాస్."
+                    return f"Searching for {original} on {target_site.capitalize()}, Boss."
+                else:
+                    return f"I couldn't complete the search because {res.get('reason', res.get('result', {}).get('reason', 'unknown error'))}"
 
         # 0D. DOMAIN AGENT DISPATCH VIA CENTRAL AGENT MANAGER
         agent_res = self._dispatch_to_domain_agent(command, original)
