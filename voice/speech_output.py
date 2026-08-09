@@ -27,19 +27,19 @@ import time
 
 def _get_sapi5_engine():
     global _sapi5_engine
-    if _sapi5_engine is None:
-        with _engine_lock:
-            if _sapi5_engine is None:
-                _init_com_if_needed()
-                try:
-                    logger.info("[VoiceOutput] Initializing pyttsx3 global SAPI5 engine...")
-                    _sapi5_engine = pyttsx3.init()
-                    rate = getattr(config, "VOICE_RATE", 170)
-                    volume = getattr(config, "VOICE_VOLUME", 1.0)
-                    _sapi5_engine.setProperty("rate", rate)
-                    _sapi5_engine.setProperty("volume", volume)
-                except Exception as err:
-                    logger.error(f"[VoiceOutput] TTS_ERROR initializing global SAPI5 engine: {err}")
+    with _engine_lock:
+        if _sapi5_engine is None:
+            _init_com_if_needed()
+            try:
+                logger.info("[VoiceOutput] Initializing pyttsx3 SAPI5 engine...")
+                _sapi5_engine = pyttsx3.init()
+                rate = getattr(config, "VOICE_RATE", 170)
+                volume = getattr(config, "VOICE_VOLUME", 1.0)
+                _sapi5_engine.setProperty("rate", rate)
+                _sapi5_engine.setProperty("volume", volume)
+            except Exception as err:
+                logger.error(f"[VoiceOutput] TTS_ERROR initializing SAPI5 engine: {err}")
+                _sapi5_engine = None
     return _sapi5_engine
 
 
@@ -138,8 +138,6 @@ def speak(text: str, language: str = None) -> bool:
 
     try:
         if language == "te":
-            # Reuse the cached SAPI5 engine — do NOT call pyttsx3.init() here;
-            # that would leak a new COM engine instance on every call.
             engine_test = _get_sapi5_engine()
             voices = engine_test.getProperty("voices") if engine_test else []
             sapi_telugu_voice = None
@@ -159,7 +157,7 @@ def speak(text: str, language: str = None) -> bool:
 
 def _speak_sapi5_with_voice(clean_txt: str, voice, lang: str) -> bool:
     """Synthesize text using a specific Windows SAPI5 voice."""
-    global _current_engine
+    global _current_engine, _sapi5_engine
     engine = _get_sapi5_engine()
     if engine is None:
         return False
@@ -201,6 +199,12 @@ def _speak_sapi5_with_voice(clean_txt: str, voice, lang: str) -> bool:
     finally:
         with _engine_lock:
             _current_engine = None
+            if _sapi5_engine is not None:
+                try:
+                    _sapi5_engine.stop()
+                except Exception:
+                    pass
+                _sapi5_engine = None
         _speaking_flag.clear()
 
     return not interrupted
@@ -255,7 +259,7 @@ def _speak_telugu_piper(clean_txt: str) -> bool:
 
 def _speak_english_sapi5(clean_txt: str) -> bool:
     """Synthesize English text using Windows SAPI5 Microsoft David (Male) engine."""
-    global _current_engine
+    global _current_engine, _sapi5_engine
     engine = _get_sapi5_engine()
     if engine is None:
         return False
@@ -309,6 +313,12 @@ def _speak_english_sapi5(clean_txt: str) -> bool:
     finally:
         with _engine_lock:
             _current_engine = None
+            if _sapi5_engine is not None:
+                try:
+                    _sapi5_engine.stop()
+                except Exception:
+                    pass
+                _sapi5_engine = None
         _speaking_flag.clear()
 
     return not interrupted
@@ -321,7 +331,7 @@ def speaking() -> bool:
 
 def stop_speaking() -> None:
     """Immediately interrupt and stop ongoing TTS audio output (English & Telugu)."""
-    global _current_engine
+    global _current_engine, _sapi5_engine
     logger.info("[VoiceOutput] Interruption triggered: Stopping TTS playback...")
     _stop_flag.set()
     _speaking_flag.clear()
@@ -338,3 +348,9 @@ def stop_speaking() -> None:
             except Exception as e:
                 logger.debug(f"[VoiceOutput] Engine stop notice: {e}")
             _current_engine = None
+        if _sapi5_engine:
+            try:
+                _sapi5_engine.stop()
+            except Exception:
+                pass
+            _sapi5_engine = None

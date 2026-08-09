@@ -81,9 +81,9 @@ def stop_interruption_listener():
     with _interruption_lock:
         if _interruption_stop_fn is not None:
             try:
-                _interruption_stop_fn(wait_for_stop=False)
-            except Exception:
-                pass
+                _interruption_stop_fn(wait_for_stop=True)
+            except Exception as exc:
+                logger.debug(f"[VoiceInterrupt] Stop notice: {exc}")
             _interruption_stop_fn = None
 
 

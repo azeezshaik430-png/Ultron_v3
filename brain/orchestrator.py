@@ -730,6 +730,13 @@ class Orchestrator:
         # 0. DIRECT LOCAL ROUTING (SYSTEM & VOLUME)
         # Bypass LLM completely for deterministic system controls
         vol_lower = original
+        prefixes = ["hey ultron,", "hey ultron", "ultron,", "ultron", "hey, ultron,", "hey, ultron"]
+        for p in prefixes:
+            if vol_lower.startswith(p):
+                vol_lower = vol_lower[len(p):].strip()
+                break
+        vol_lower = vol_lower.lstrip(",:;!.- ").strip()
+
         if vol_lower in ["volume up", "increase volume", "volume penchu", "volume penchandi"]:
             t_act_start = time.perf_counter()
             res = self._system_agent._do_execute_task("volume", {"action": "volume_up"})
