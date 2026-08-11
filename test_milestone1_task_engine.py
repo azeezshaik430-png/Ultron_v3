@@ -114,9 +114,8 @@ class TestMilestone1TaskEngine(unittest.TestCase):
         self.engine._worker_threads_active[dead_worker_id] = True
         # Kill underlying thread logic by forcing it inactive in supervisor test
         with patch.object(self.engine._workers[dead_worker_id], "is_alive", return_value=False):
-            # Watchdog loop tick
-            self.engine._watchdog_loop()
-            time.sleep(0.3)
+            # Wait for the background watchdog thread (interval 0.5s) to tick and detect the failure
+            time.sleep(0.8)
 
         self.assertGreaterEqual(len(worker_failed_events), 1)
         self.assertGreater(len(worker_started_events), initial_started)

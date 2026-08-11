@@ -59,7 +59,7 @@ class TestNaturalTeluguStorage(unittest.TestCase):
         self.assertEqual(session.preferred_language, "en")
         res = orchestrator.process_command("speak in telugu")
         self.assertEqual(session.preferred_language, "te")
-        self.assertIn("మాట్లాడగలను", res)
+        self.assertIn("మాట్లాడతాను", res)
 
     def test_04_english_language_mode_switch(self) -> None:
         """Verify 'speak in english' switches session.preferred_language to 'en'."""

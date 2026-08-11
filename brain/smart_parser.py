@@ -57,10 +57,10 @@ def detect_language_intent(command: str):
     command = command.lower().strip()
     
     # Check explicit switch requests
-    if any(x in command for x in ["speak english", "change your language to english", "switch to english", "english lo cheppu"]):
+    if any(x in command for x in ["speak english", "speak in english", "change your language to english", "switch to english", "english lo cheppu"]):
         return ("en", "en")
     
-    if any(x in command for x in ["speak telugu", "change your language to telugu", "switch to telugu", "telugu lo cheppu", "telugu lo matladu"]):
+    if any(x in command for x in ["speak telugu", "speak in telugu", "change your language to telugu", "switch to telugu", "telugu lo cheppu", "telugu lo matladu"]):
         return ("te", "te")
 
     # Explicit English markers

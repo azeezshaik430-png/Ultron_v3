@@ -34,22 +34,25 @@ class LocalVectorEmbeddingProvider(EmbeddingProvider):
         self.vector_dim = vector_dim
 
     def get_embedding(self, text: str) -> List[float]:
+        import zlib
         if not text or not text.strip():
             return [0.0] * self.vector_dim
 
         vec = [0.0] * self.vector_dim
-        words = text.lower().split()
+        # Clean punctuation to improve token matching (e.g. matching "game" to "favorite_game:")
+        cleaned = "".join(c if c.isalnum() or c.isspace() else " " for c in text.lower())
+        words = cleaned.split()
 
-        # Word & character 3-gram feature hashing
+        # Word & character 3-gram feature hashing using deterministic Adler-32
         for word in words:
             # Word hashing
-            h_val = hash(word) % self.vector_dim
+            h_val = zlib.adler32(word.encode('utf-8')) % self.vector_dim
             vec[h_val] += 1.0
 
             # Character tri-gram hashing
             for i in range(len(word) - 2):
                 gram = word[i : i + 3]
-                g_val = hash(gram) % self.vector_dim
+                g_val = zlib.adler32(gram.encode('utf-8')) % self.vector_dim
                 vec[g_val] += 0.5
 
         # L2 Normalization

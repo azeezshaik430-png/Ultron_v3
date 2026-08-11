@@ -160,14 +160,14 @@ def stop_interruption_listener():
 
 
 def listen(silent=False):
-    from voice.speech_output import speaking
+    from voice.speech_output import speaking, stop_speaking
 
     stop_interruption_listener()
 
-    # Do not record while speaking if we are handling it in background
+    # If speaking, stop it immediately and continue listening
     if speaking():
-        time.sleep(0.5)
-        return ""
+        stop_speaking()
+        time.sleep(0.1)
 
     if not silent:
         logger.info("Listening Boss...")
