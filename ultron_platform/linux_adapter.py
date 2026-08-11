@@ -29,7 +29,7 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional
 
-from ultron_platform.interface import PlatformAdapter, PlatformCapabilityError
+from ultron_platform.interface import CapabilityStatus, PlatformAdapter, PlatformCapabilityError
 
 
 def _which(cmd: str) -> Optional[str]:
@@ -69,10 +69,32 @@ class LinuxAdapter(PlatformAdapter):
 
     def __init__(self) -> None:
         self._audio_backend: Optional[str] = None  # lazy detect
+        self._capabilities = {
+            "open_application": CapabilityStatus.SUPPORTED,
+            "open_path": CapabilityStatus.SUPPORTED,
+            "focus_window": CapabilityStatus.SUPPORTED if _which("wmctrl") else CapabilityStatus.NOT_AVAILABLE,
+            "volume_control": CapabilityStatus.SUPPORTED if (_which("pactl") or _which("amixer") or _which("wpctl")) else CapabilityStatus.NOT_AVAILABLE,
+            "system_power": CapabilityStatus.SUPPORTED if _which("systemctl") else CapabilityStatus.NOT_AVAILABLE,
+            "brightness_control": CapabilityStatus.SUPPORTED if (_which("brightnessctl") or _which("xrandr")) else CapabilityStatus.NOT_AVAILABLE,
+            "wifi_status": CapabilityStatus.SUPPORTED if (_which("nmcli") or _which("iwconfig")) else CapabilityStatus.NOT_AVAILABLE,
+            "bluetooth_status": CapabilityStatus.SUPPORTED if _which("bluetoothctl") else CapabilityStatus.NOT_AVAILABLE,
+            "clipboard": CapabilityStatus.SUPPORTED if (_which("xclip") or _which("wl-clipboard")) else CapabilityStatus.NOT_AVAILABLE,
+            "notifications": CapabilityStatus.SUPPORTED if _which("notify-send") else CapabilityStatus.NOT_AVAILABLE,
+            "take_screenshot": CapabilityStatus.SUPPORTED if (_which("scrot") or _which("gnome-screenshot")) else CapabilityStatus.NOT_AVAILABLE,
+            "mouse_click": CapabilityStatus.SUPPORTED if _which("xdotool") else CapabilityStatus.NOT_AVAILABLE,
+            "keyboard_type": CapabilityStatus.SUPPORTED if _which("xdotool") else CapabilityStatus.NOT_AVAILABLE,
+            "process_management": CapabilityStatus.SUPPORTED,
+        }
 
     @property
     def platform_name(self) -> str:
         return "Linux"
+
+    def get_capabilities(self) -> Dict[str, CapabilityStatus]:
+        return self._capabilities.copy()
+
+    def get_capability_status(self, capability: str) -> CapabilityStatus:
+        return self._capabilities.get(capability, CapabilityStatus.UNSUPPORTED)
 
     # =========================================================================
     # APPLICATION LAUNCHING
@@ -445,3 +467,113 @@ class LinuxAdapter(PlatformAdapter):
             if path:
                 return [path]
         return ["sh"]
+
+    # =========================================================================
+    # EXTENDED HARDWARE & OS CONTROLS
+    # =========================================================================
+
+    def set_brightness(self, level: float) -> Dict[str, Any]:
+        val = max(0, min(100, int(level * 100)))
+        if _which("brightnessctl"):
+            try:
+                subprocess.run(["brightnessctl", "set", f"{val}%"], check=True)
+                return {"available": True, "result": f"Brightness set to {val}%.", "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        return {"available": False, "reason": "brightnessctl is not installed on this Linux environment.", "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def get_brightness(self) -> Dict[str, Any]:
+        if _which("brightnessctl"):
+            try:
+                res = subprocess.run(["brightnessctl", "info"], capture_output=True, text=True, check=True)
+                return {"available": True, "result": res.stdout, "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        return {"available": False, "reason": "brightnessctl is not installed on this Linux environment.", "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def get_wifi_status(self) -> Dict[str, Any]:
+        if _which("nmcli"):
+            try:
+                res = subprocess.run(["nmcli", "radio", "wifi"], capture_output=True, text=True, check=True)
+                return {"available": True, "result": res.stdout.strip(), "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        return {"available": False, "reason": "nmcli is not installed on this Linux environment.", "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def get_bluetooth_status(self) -> Dict[str, Any]:
+        if _which("bluetoothctl"):
+            try:
+                res = subprocess.run(["bluetoothctl", "show"], capture_output=True, text=True, check=True)
+                return {"available": True, "result": res.stdout, "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        return {"available": False, "reason": "bluetoothctl is not installed on this Linux environment.", "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def get_clipboard(self) -> Dict[str, Any]:
+        if _which("xclip"):
+            try:
+                res = subprocess.run(["xclip", "-selection", "clipboard", "-o"], capture_output=True, text=True, check=True)
+                return {"available": True, "result": res.stdout, "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        elif _which("wl-paste"):
+            try:
+                res = subprocess.run(["wl-paste"], capture_output=True, text=True, check=True)
+                return {"available": True, "result": res.stdout, "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        return {"available": False, "reason": "Neither xclip nor wl-clipboard found on this Linux environment.", "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def set_clipboard(self, text: str) -> Dict[str, Any]:
+        if _which("xclip"):
+            try:
+                p = subprocess.Popen(["xclip", "-selection", "clipboard"], stdin=subprocess.PIPE, text=True)
+                p.communicate(input=text)
+                return {"available": True, "result": "Copied to clipboard.", "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        return {"available": False, "reason": "xclip utility not installed on this Linux environment.", "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def send_notification(self, title: str, message: str) -> Dict[str, Any]:
+        if _which("notify-send"):
+            try:
+                subprocess.run(["notify-send", title, message], check=True)
+                return {"available": True, "result": "Notification sent.", "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        return {"available": False, "reason": "notify-send is not installed on this Linux environment.", "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def take_screenshot(self, output_path: Optional[str] = None) -> Dict[str, Any]:
+        out = output_path or "/tmp/ultron_screenshot.png"
+        if _which("scrot"):
+            try:
+                subprocess.run(["scrot", out], check=True)
+                return {"available": True, "result": f"Screenshot saved to {out}.", "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        elif _which("gnome-screenshot"):
+            try:
+                subprocess.run(["gnome-screenshot", "-f", out], check=True)
+                return {"available": True, "result": f"Screenshot saved to {out}.", "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        return {"available": False, "reason": "Neither scrot nor gnome-screenshot found on this Linux environment.", "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def mouse_click(self, x: int, y: int, button: str = "left") -> Dict[str, Any]:
+        if _which("xdotool"):
+            try:
+                btn_num = "1" if button == "left" else "3"
+                subprocess.run(["xdotool", "mousemove", str(x), str(y), "click", btn_num], check=True)
+                return {"available": True, "result": f"Mouse clicked at ({x}, {y}).", "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        return {"available": False, "reason": "xdotool is not installed on this Linux environment.", "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def keyboard_type(self, text: str) -> Dict[str, Any]:
+        if _which("xdotool"):
+            try:
+                subprocess.run(["xdotool", "type", text], check=True)
+                return {"available": True, "result": f"Typed '{text}'.", "status": CapabilityStatus.SUPPORTED}
+            except Exception as e:
+                return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+        return {"available": False, "reason": "xdotool is not installed on this Linux environment.", "status": CapabilityStatus.NOT_AVAILABLE}

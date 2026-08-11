@@ -14,7 +14,7 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional
 
-from ultron_platform.interface import PlatformAdapter, PlatformCapabilityError
+from ultron_platform.interface import CapabilityStatus, PlatformAdapter, PlatformCapabilityError
 
 
 class WindowsAdapter(PlatformAdapter):
@@ -28,9 +28,33 @@ class WindowsAdapter(PlatformAdapter):
         - Windows shutdown / rundll32 / explorer / powershell
     """
 
+    def __init__(self):
+        self._capabilities = {
+            "open_application": CapabilityStatus.SUPPORTED,
+            "open_path": CapabilityStatus.SUPPORTED,
+            "focus_window": CapabilityStatus.SUPPORTED,
+            "volume_control": CapabilityStatus.SUPPORTED,
+            "system_power": CapabilityStatus.SUPPORTED,
+            "brightness_control": CapabilityStatus.SUPPORTED,
+            "wifi_status": CapabilityStatus.SUPPORTED,
+            "bluetooth_status": CapabilityStatus.SUPPORTED,
+            "clipboard": CapabilityStatus.SUPPORTED,
+            "notifications": CapabilityStatus.SUPPORTED,
+            "take_screenshot": CapabilityStatus.SUPPORTED,
+            "mouse_click": CapabilityStatus.SUPPORTED,
+            "keyboard_type": CapabilityStatus.SUPPORTED,
+            "process_management": CapabilityStatus.SUPPORTED,
+        }
+
     @property
     def platform_name(self) -> str:
         return "Windows"
+
+    def get_capabilities(self) -> Dict[str, CapabilityStatus]:
+        return self._capabilities.copy()
+
+    def get_capability_status(self, capability: str) -> CapabilityStatus:
+        return self._capabilities.get(capability, CapabilityStatus.UNSUPPORTED)
 
     # =========================================================================
     # APPLICATION LAUNCHING
@@ -321,3 +345,100 @@ class WindowsAdapter(PlatformAdapter):
             "System32", "cmd.exe"
         )
         return [cmd]
+
+    # =========================================================================
+    # EXTENDED HARDWARE & OS CONTROLS
+    # =========================================================================
+
+    def set_brightness(self, level: float) -> Dict[str, Any]:
+        val = max(0, min(100, int(level * 100)))
+        try:
+            ps_cmd = f"(Get-WmiObject -Namespace root/wmi -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, {val})"
+            res = subprocess.run(["powershell", "-Command", ps_cmd], shell=False, capture_output=True, text=True)
+            if res.returncode == 0:
+                return {"available": True, "result": f"Brightness set to {val}%.", "status": CapabilityStatus.SUPPORTED}
+            return {"available": False, "reason": res.stderr.strip() or "WMI Brightness unsupported on this display.", "status": CapabilityStatus.NOT_AVAILABLE}
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def get_brightness(self) -> Dict[str, Any]:
+        try:
+            ps_cmd = "(Get-WmiObject -Namespace root/wmi -Class WmiMonitorBrightness).CurrentBrightness"
+            res = subprocess.run(["powershell", "-Command", ps_cmd], shell=False, capture_output=True, text=True)
+            if res.returncode == 0 and res.stdout.strip().isdigit():
+                val = float(res.stdout.strip()) / 100.0
+                return {"available": True, "result": val, "status": CapabilityStatus.SUPPORTED}
+            return {"available": False, "reason": "WMI Brightness reading unavailable.", "status": CapabilityStatus.NOT_AVAILABLE}
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def get_wifi_status(self) -> Dict[str, Any]:
+        try:
+            res = subprocess.run(["netsh", "wlan", "show", "interfaces"], shell=False, capture_output=True, text=True)
+            if res.returncode == 0:
+                return {"available": True, "result": res.stdout, "status": CapabilityStatus.SUPPORTED}
+            return {"available": False, "reason": res.stderr.strip(), "status": CapabilityStatus.NOT_AVAILABLE}
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def get_bluetooth_status(self) -> Dict[str, Any]:
+        try:
+            res = subprocess.run(["powershell", "-Command", "Get-PnpDevice -Class Bluetooth | Select-Object FriendlyName, Status"], shell=False, capture_output=True, text=True)
+            if res.returncode == 0:
+                return {"available": True, "result": res.stdout, "status": CapabilityStatus.SUPPORTED}
+            return {"available": False, "reason": "Bluetooth PnP query unavailable.", "status": CapabilityStatus.NOT_AVAILABLE}
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def get_clipboard(self) -> Dict[str, Any]:
+        try:
+            res = subprocess.run(["powershell", "-Command", "Get-Clipboard"], shell=False, capture_output=True, text=True)
+            if res.returncode == 0:
+                return {"available": True, "result": res.stdout.rstrip("\r\n"), "status": CapabilityStatus.SUPPORTED}
+            return {"available": False, "reason": res.stderr.strip(), "status": CapabilityStatus.NOT_AVAILABLE}
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def set_clipboard(self, text: str) -> Dict[str, Any]:
+        try:
+            ps_cmd = f"Set-Clipboard -Value '{text}'"
+            res = subprocess.run(["powershell", "-Command", ps_cmd], shell=False, capture_output=True, text=True)
+            if res.returncode == 0:
+                return {"available": True, "result": "Copied to clipboard.", "status": CapabilityStatus.SUPPORTED}
+            return {"available": False, "reason": res.stderr.strip(), "status": CapabilityStatus.NOT_AVAILABLE}
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def send_notification(self, title: str, message: str) -> Dict[str, Any]:
+        try:
+            ps_cmd = f"[reflection.assembly]::loadwithpartialname('System.Windows.Forms'); $n = new-object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Information; $n.Visible = $true; $n.ShowBalloonTip(3000, '{title}', '{message}', [System.Windows.Forms.ToolTipIcon]::Info)"
+            subprocess.run(["powershell", "-Command", ps_cmd], shell=False, capture_output=True, text=True)
+            return {"available": True, "result": "Notification sent.", "status": CapabilityStatus.SUPPORTED}
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def take_screenshot(self, output_path: Optional[str] = None) -> Dict[str, Any]:
+        try:
+            import pyautogui
+            out = output_path or os.path.join(os.environ.get("TEMP", r"C:\Windows\Temp"), "ultron_screenshot.png")
+            img = pyautogui.screenshot()
+            img.save(out)
+            return {"available": True, "result": f"Screenshot saved to {out}.", "status": CapabilityStatus.SUPPORTED}
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def mouse_click(self, x: int, y: int, button: str = "left") -> Dict[str, Any]:
+        try:
+            import pyautogui
+            pyautogui.click(x, y, button=button)
+            return {"available": True, "result": f"Clicked at ({x}, {y}).", "status": CapabilityStatus.SUPPORTED}
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+
+    def keyboard_type(self, text: str) -> Dict[str, Any]:
+        try:
+            import pyautogui
+            pyautogui.typewrite(text)
+            return {"available": True, "result": f"Typed '{text}'.", "status": CapabilityStatus.SUPPORTED}
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}

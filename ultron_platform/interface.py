@@ -16,8 +16,20 @@ This design ensures the core assistant never silently fails on unsupported
 platforms — it receives an honest status and can respond accordingly.
 """
 
+from enum import Enum
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
+
+
+class CapabilityStatus(str, Enum):
+    """
+    Standardized capability support status for cross-platform operations.
+    """
+    SUPPORTED = "SUPPORTED"
+    UNSUPPORTED = "UNSUPPORTED"
+    NOT_AVAILABLE = "NOT_AVAILABLE"
+    REQUIRES_PERMISSION = "REQUIRES_PERMISSION"
+    NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
 
 
 class PlatformCapabilityError(Exception):
@@ -30,18 +42,32 @@ class PlatformCapabilityError(Exception):
 
 class PlatformAdapter(ABC):
     """
-    Abstract platform adapter.
-    Concrete implementations: WindowsAdapter, LinuxAdapter.
+    Abstract platform adapter contract.
+    Concrete implementations: WindowsAdapter, LinuxAdapter, MacOSAdapter.
     """
 
     # =========================================================================
-    # IDENTITY
+    # IDENTITY & CAPABILITIES
     # =========================================================================
 
     @property
     @abstractmethod
     def platform_name(self) -> str:
-        """Human-readable platform name, e.g. 'Windows', 'Linux'."""
+        """Human-readable platform name, e.g. 'Windows', 'Linux', 'macOS'."""
+        pass
+
+    @abstractmethod
+    def get_capabilities(self) -> Dict[str, CapabilityStatus]:
+        """
+        Return a map of all OS capability names to their CapabilityStatus on the current host.
+        """
+        pass
+
+    @abstractmethod
+    def get_capability_status(self, capability: str) -> CapabilityStatus:
+        """
+        Return the CapabilityStatus for a specific capability name.
+        """
         pass
 
     # =========================================================================
@@ -238,5 +264,60 @@ class PlatformAdapter(ABC):
 
         Windows: ["cmd.exe"]  or  ["powershell.exe"]
         Linux:   ["xterm"]    or  ["gnome-terminal"]  or best available
+        macOS:   ["open", "-a", "Terminal"]
         """
+        pass
+
+    # =========================================================================
+    # EXTENDED HARDWARE & OS CONTROLS
+    # =========================================================================
+
+    @abstractmethod
+    def set_brightness(self, level: float) -> Dict[str, Any]:
+        """Set display brightness level (0.0 to 1.0)."""
+        pass
+
+    @abstractmethod
+    def get_brightness(self) -> Dict[str, Any]:
+        """Get current display brightness level (0.0 to 1.0)."""
+        pass
+
+    @abstractmethod
+    def get_wifi_status(self) -> Dict[str, Any]:
+        """Get Wi-Fi interface status and connected network SSID."""
+        pass
+
+    @abstractmethod
+    def get_bluetooth_status(self) -> Dict[str, Any]:
+        """Get Bluetooth interface state."""
+        pass
+
+    @abstractmethod
+    def get_clipboard(self) -> Dict[str, Any]:
+        """Read text from OS system clipboard."""
+        pass
+
+    @abstractmethod
+    def set_clipboard(self, text: str) -> Dict[str, Any]:
+        """Copy text to OS system clipboard."""
+        pass
+
+    @abstractmethod
+    def send_notification(self, title: str, message: str) -> Dict[str, Any]:
+        """Send a native OS desktop notification."""
+        pass
+
+    @abstractmethod
+    def take_screenshot(self, output_path: Optional[str] = None) -> Dict[str, Any]:
+        """Capture screen image to file."""
+        pass
+
+    @abstractmethod
+    def mouse_click(self, x: int, y: int, button: str = "left") -> Dict[str, Any]:
+        """Simulate mouse click at screen coordinates (x, y)."""
+        pass
+
+    @abstractmethod
+    def keyboard_type(self, text: str) -> Dict[str, Any]:
+        """Simulate keyboard typing of text string."""
         pass

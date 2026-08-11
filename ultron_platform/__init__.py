@@ -38,8 +38,10 @@ def get_platform_adapter() -> "PlatformAdapter":
     elif sys.platform.startswith("linux"):
         from ultron_platform.linux_adapter import LinuxAdapter
         _adapter_instance = LinuxAdapter()
+    elif sys.platform == "darwin":
+        from ultron_platform.macos_adapter import MacOSAdapter
+        _adapter_instance = MacOSAdapter()
     else:
-        # Fallback — macOS and others use POSIX adapter
         from ultron_platform.linux_adapter import LinuxAdapter
         _adapter_instance = LinuxAdapter()
 
@@ -54,6 +56,11 @@ def is_windows() -> bool:
 def is_linux() -> bool:
     """Return True if the current OS is Linux."""
     return sys.platform.startswith("linux")
+
+
+def is_macos() -> bool:
+    """Return True if the current OS is macOS."""
+    return sys.platform == "darwin"
 
 
 def platform_name() -> str:
