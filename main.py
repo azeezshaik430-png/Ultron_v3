@@ -12,7 +12,7 @@ from core.logger import logger
 from core.session import session
 from brain.orchestrator import orchestrator
 from voice.wake_listener import wait_for_wake_word
-from voice.speech_input import listen
+from voice.speech_input import listen, listen_confirmation
 from voice.speech_output import speak, stop_speaking
 
 
@@ -35,13 +35,30 @@ def start_ultron() -> None:
     try:
         while True:
             try:
-                wait_for_wake_word()
+                wake_ok, initial_cmd = wait_for_wake_word()
                 session.enter_active()
 
+                first_turn = True
                 while session.is_active_mode:
-                    command = listen()
-                    if not command:
-                        continue
+                    if first_turn and initial_cmd:
+                        command = initial_cmd
+                        first_turn = False
+                    elif session.pending_confirmation:
+                        first_turn = False
+                        expires_at = session.pending_confirmation.get("expires_at", time.time() + 15.0)
+                        command = listen_confirmation(expires_at=expires_at)
+                        if not command:
+                            if session.is_confirmation_expired(timeout_seconds=15.0):
+                                result = orchestrator.process_command("")
+                                logger.info(f"{config.ASSISTANT_NAME}: {result}")
+                                if not session.session_data.pop("_already_spoken", False):
+                                    speak(result)
+                            continue
+                    else:
+                        first_turn = False
+                        command = listen()
+                        if not command:
+                            continue
 
                     command_str = command.lower().strip()
                     if command_str in ["sleep", "go to sleep", "sleep ultron", "good night"]:
@@ -63,15 +80,21 @@ def start_ultron() -> None:
                     result = orchestrator.process_command(command_str)
                     logger.info(f"{config.ASSISTANT_NAME}: {result}")
                     if not session.session_data.pop("_already_spoken", False):
-                        # CRITICAL: speak() MUST run on the same thread that created the
-                        # pyttsx3/SAPI5 engine (main thread). Running it in a daemon thread
-                        # causes a COM STA cross-apartment deadlock: engine.runAndWait()
-                        # blocks waiting for the main thread's COM event pump, but the main
-                        # thread is also blocked → _speaking_flag is never cleared →
-                        # ULTRON goes permanently deaf. Call synchronously here instead.
-                        # Voice interruption still works via the background interruption
-                        # listener (start_interruption_listener inside speak()).
-                        speak(result)
+                        is_conf = session.pending_confirmation is not None
+                        speak(result, allow_interruption=not is_conf)
+                        if is_conf and session.pending_confirmation:
+                            session.mark_confirmation_input_window_started()
+                            now = time.time()
+                            created_at = session.pending_confirmation.get("created_at", now)
+                            start_at = session.pending_confirmation.get("input_window_started_at", now)
+                            expires_at = session.pending_confirmation.get("expires_at", now + 15.0)
+                            rem_ms = (expires_at - now) * 1000.0
+                            logger.info(
+                                f"[ConfirmationTiming] confirmation_created_at: {created_at:.4f} | "
+                                f"confirmation_input_window_started: {start_at:.4f} | "
+                                f"confirmation_expires_at: {expires_at:.4f} | "
+                                f"remaining_confirmation_ms: {rem_ms:.2f} ms"
+                            )
 
             except KeyboardInterrupt:
                 logger.info("Keyboard interrupt detected. Shutting down...")

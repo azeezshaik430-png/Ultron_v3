@@ -26,12 +26,29 @@ try:
 except ImportError:
     HAS_CV2 = False
 
+import shutil
+
 try:
     import pytesseract
-    import os
-    _TESSERACT_PATH = r"c:\program Files\Tesseract-OCR\tesseract.exe"
-    if os.path.exists(_TESSERACT_PATH):
-        pytesseract.pytesseract.tesseract_cmd = _TESSERACT_PATH
+    # Dynamic discovery for Tesseract binary path
+    tesseract_env = os.getenv("TESSERACT_PATH")
+    if tesseract_env and os.path.exists(tesseract_env):
+        pytesseract.pytesseract.tesseract_cmd = tesseract_env
+    else:
+        system_tesseract = shutil.which("tesseract")
+        if system_tesseract:
+            pytesseract.pytesseract.tesseract_cmd = system_tesseract
+        else:
+            common_paths = [
+                r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+                r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+                "/usr/bin/tesseract",
+                "/usr/local/bin/tesseract",
+            ]
+            for p in common_paths:
+                if os.path.exists(p):
+                    pytesseract.pytesseract.tesseract_cmd = p
+                    break
     HAS_PYTESSERACT = True
 except ImportError:
     HAS_PYTESSERACT = False

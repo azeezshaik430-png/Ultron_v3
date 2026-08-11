@@ -249,7 +249,7 @@ class WindowsAdapter(PlatformAdapter):
     def shutdown(self, delay_sec: int = 5) -> Dict[str, Any]:
         try:
             import subprocess
-            res = subprocess.run(f"shutdown /s /t {delay_sec}", shell=True, capture_output=True, text=True)
+            res = subprocess.run(["shutdown", "/s", "/t", str(delay_sec)], shell=False, capture_output=True, text=True)
             if res.returncode == 0:
                 return {"available": True, "result": "Shutting down computer Boss.", "verified": True, "success": True}
             return {"available": True, "result": None, "error": res.stderr.strip(), "verified": False, "success": False}
@@ -259,7 +259,7 @@ class WindowsAdapter(PlatformAdapter):
     def restart(self, delay_sec: int = 5) -> Dict[str, Any]:
         try:
             import subprocess
-            res = subprocess.run(f"shutdown /r /t {delay_sec}", shell=True, capture_output=True, text=True)
+            res = subprocess.run(["shutdown", "/r", "/t", str(delay_sec)], shell=False, capture_output=True, text=True)
             if res.returncode == 0:
                 return {"available": True, "result": "Restarting computer Boss.", "verified": True, "success": True}
             return {"available": True, "result": None, "error": res.stderr.strip(), "verified": False, "success": False}
@@ -269,7 +269,7 @@ class WindowsAdapter(PlatformAdapter):
     def sleep(self) -> Dict[str, Any]:
         try:
             import subprocess
-            res = subprocess.run("rundll32.exe powrprof.dll,SetSuspendState 0,1,0", shell=True, capture_output=True, text=True)
+            res = subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"], shell=False, capture_output=True, text=True)
             if res.returncode == 0:
                 return {"available": True, "result": "Going to sleep mode Boss.", "verified": True, "success": True}
             return {"available": True, "result": None, "error": res.stderr.strip(), "verified": False, "success": False}
@@ -279,7 +279,7 @@ class WindowsAdapter(PlatformAdapter):
     def lock(self) -> Dict[str, Any]:
         try:
             import subprocess
-            res = subprocess.run("rundll32.exe user32.dll,LockWorkStation", shell=True, capture_output=True, text=True)
+            res = subprocess.run(["rundll32.exe", "user32.dll,LockWorkStation"], shell=False, capture_output=True, text=True)
             if res.returncode == 0:
                 return {"available": True, "result": "Locking computer Boss.", "verified": True, "success": True}
             return {"available": True, "result": None, "error": res.stderr.strip(), "verified": False, "success": False}
@@ -289,7 +289,7 @@ class WindowsAdapter(PlatformAdapter):
     def sign_out(self) -> Dict[str, Any]:
         try:
             import subprocess
-            res = subprocess.run("shutdown /l", shell=True, capture_output=True, text=True)
+            res = subprocess.run(["shutdown", "/l"], shell=False, capture_output=True, text=True)
             if res.returncode == 0:
                 return {"available": True, "result": "Signing out Boss.", "verified": True, "success": True}
             return {"available": True, "result": None, "error": res.stderr.strip(), "verified": False, "success": False}
@@ -297,8 +297,12 @@ class WindowsAdapter(PlatformAdapter):
             return {"available": True, "result": None, "error": str(e), "verified": False, "success": False}
 
     def open_settings(self) -> Dict[str, Any]:
-        os.system("start ms-settings:")
-        return {"available": True, "result": "Opening Windows Settings."}
+        try:
+            import subprocess
+            subprocess.Popen(["cmd.exe", "/c", "start ms-settings:"], shell=False)
+            return {"available": True, "result": "Opening Windows Settings."}
+        except Exception as e:
+            return {"available": True, "result": None, "error": str(e)}
 
     # =========================================================================
     # SHELL / TERMINAL

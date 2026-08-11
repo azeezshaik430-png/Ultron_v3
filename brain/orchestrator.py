@@ -86,8 +86,69 @@ ULTRON_SHUTDOWN_PHRASES = {
     "terminate ultron",
 }
 
-CONFIRM_RESPONSES = {"yes", "yes boss", "confirm", "continue", "proceed", "do it"}
-CANCEL_RESPONSES = {"no", "cancel", "stop", "never mind"}
+CONFIRM_RESPONSES = {"yes", "yes boss", "confirm", "continue", "proceed", "do it", "yeah", "sure", "ok", "okay", "yep", "ha", "avunu", "sare"}
+CANCEL_RESPONSES = {"no", "cancel", "stop", "never mind", "don't", "vaddu", "cancel cheyyi"}
+
+EXACT_CONFIRMATIONS = {
+    "yes", "yes boss", "confirm", "continue", "proceed", "do it",
+    "yeah", "yep", "sure", "ok", "okay", "ha", "avunu", "sare",
+    "yes please", "do it boss", "proceed boss", "confirm boss",
+    "yes do it", "yes proceed", "yes confirm"
+}
+
+ACTION_SPECIFIC_CONFIRMATIONS = {
+    "shutdown_pc": {
+        "yes shutdown", "yes shutdown pc", "yes turn off pc",
+        "confirm shutdown", "yes shut down", "yes power off",
+        "yes shutdown computer", "confirm shutdown pc"
+    },
+    "restart_pc": {
+        "yes restart", "yes restart pc", "yes reboot",
+        "confirm restart", "confirm restart pc", "yes restart computer"
+    },
+    "sign_out_pc": {
+        "yes sign out", "yes log out", "confirm sign out", "yes sign me out"
+    },
+    "sleep_pc": {
+        "yes sleep", "yes sleep pc", "confirm sleep", "yes put to sleep"
+    },
+    "lock_pc": {
+        "yes lock", "yes lock pc", "confirm lock"
+    }
+}
+
+EXACT_CANCELLATIONS = {
+    "no", "no boss", "cancel", "stop", "never mind", "don't", "vaddu",
+    "cancel cheyyi", "don't do it", "cancel it", "stop it", "no don't",
+    "don't do that", "abort", "no cancel", "please cancel", "vaddu boss"
+}
+
+def is_valid_confirmation(original: str, command: str, norm: str, action_type: str) -> bool:
+    """
+    Strict, deterministic confirmation validation bound to pending action type.
+    Prevents false positive substring or token matches.
+    """
+    for input_str in [norm, original.lower().strip(), command.lower().strip()]:
+        if input_str in EXACT_CONFIRMATIONS:
+            return True
+        allowed_action_phrases = ACTION_SPECIFIC_CONFIRMATIONS.get(action_type, set())
+        if input_str in allowed_action_phrases:
+            return True
+    return False
+
+def is_valid_cancellation(original: str, command: str, norm: str) -> bool:
+    """
+    Strict cancellation validation to safely abort pending confirmations.
+    """
+    for input_str in [norm, original.lower().strip(), command.lower().strip()]:
+        if input_str in EXACT_CANCELLATIONS:
+            return True
+        if any(input_str.startswith(prefix) for prefix in ["cancel", "don't ", "stop ", "no ", "vaddu"]):
+            words = input_str.split()
+            if len(words) <= 4:
+                return True
+    return False
+
 
 DANGEROUS_COMMANDS = {
     # Action key: (display_name, requires_double, action_phrase, exec_func)
@@ -124,13 +185,45 @@ DANGEROUS_COMMANDS = {
 }
 
 
+def normalize_natural_phrase(phrase: str) -> str:
+    """
+    Normalizes natural speech phrases by stripping polite wrappers and wake words,
+    without modifying original transcript used for telemetry and conversation history.
+    """
+    p = phrase.lower().strip()
+    
+    prefixes = [
+        "hey ultron,", "hey ultron", "ultron,", "ultron",
+        "boss,", "boss", "hey,", "hey", "okay ultron", "ok ultron",
+        "can you please", "could you please", "please can you", "please could you",
+        "can you", "could you", "would you", "would you mind",
+        "please", "boss please"
+    ]
+    changed = True
+    while changed:
+        changed = False
+        for pref in prefixes:
+            if p.startswith(pref + " ") or p == pref:
+                p = p[len(pref):].strip().lstrip(",:;!.- ").strip()
+                changed = True
+                break
+                
+    suffixes = ["please", "for me", "boss", "a little", "a bit"]
+    for suff in suffixes:
+        if p.endswith(" " + suff):
+            p = p[:-len(suff)].strip().rstrip(",:;!.- ").strip()
+            
+    return p if p else phrase.lower().strip()
+
+
 def is_deterministic_command(cmd: str) -> bool:
     c = cmd.lower().strip()
+    norm = normalize_natural_phrase(c)
     
     # Volume commands
-    if c in ["volume up", "increase volume", "volume penchu", "volume penchandi", "volume down", "decrease volume", "volume tagginchu", "volume tagginchandi", "mute", "mute volume", "mute cheyyi", "mute chey", "unmute", "unmute volume", "unmute cheyyi", "unmute chey"]:
+    if any(k in norm for k in ["volume up", "increase volume", "volume penchu", "volume tagginchu", "volume down", "decrease volume", "mute", "unmute", "silence"]):
         return True
-    if c.startswith("set volume to ") or ("volume" in c and "percent" in c):
+    if norm.startswith("set volume to ") or ("volume" in norm and "percent" in norm) or ("turn" in norm and "volume" in norm):
         return True
         
     # Dangerous session commands
@@ -139,20 +232,20 @@ def is_deterministic_command(cmd: str) -> bool:
         "restart", "reboot", "sign out", "log out", "lock pc", "lock computer",
         "sleep pc", "sleep computer", "sleep my pc"
     ]
-    if any(k in c for k in dangerous_triggers):
+    if any(k in norm for k in dangerous_triggers):
         return True
         
     # Browser commands
     browser_triggers = [
-        "open ", "go to ", "navigate to ", "visit ", "search ", "play ",
-        "come back", "go back", "back", "return", "close browser", "close tab", "close page", "close youtube", "close whatsapp"
+        "open ", "go to ", "navigate to ", "visit ", "search ", "play ", "find ",
+        "come back", "go back", "back", "return", "close browser", "close tab", "close page", "close youtube", "close whatsapp", "close instagram"
     ]
     browser_suffixes = ["open cheyyi", "close cheyyi", "open chey", "close chey", "search cheyyi", "search chey", "play cheyyi", "play chey"]
-    if any(c.startswith(k) for k in browser_triggers) or any(c.endswith(s) for s in browser_suffixes):
+    if any(norm.startswith(k) for k in browser_triggers) or any(norm.endswith(s) for s in browser_suffixes):
         return True
         
     # Conversational replies like "yes" or "cancel" if pending confirmation is active
-    if c in ["yes", "no", "cancel", "confirm", "proceed", "yes boss", "cancel cheyyi", "vaddu"]:
+    if any(k in norm for k in ["yes", "no", "cancel", "confirm", "proceed", "do it", "sure", "ok", "okay", "vaddu"]):
         return True
         
     return False
@@ -209,6 +302,46 @@ def parse_search_command(cmd: str, current_url: str) -> Tuple[str, str]:
             site = "google" # Default fallback
             
     return site, clean_query
+
+
+def parse_messaging_command(cmd: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Parses natural messaging commands:
+    "Send Rahul a message saying I'll call him later" -> ('Rahul', "I'll call him later", None)
+    "Message Mom that I'm coming home" -> ('Mom', "I'm coming home", None)
+    "Open WhatsApp and message Rahul saying I'll be late" -> ('Rahul', "I'll be late", 'whatsapp')
+    "Tell Rahul I'll call him later" -> ('Rahul', "I'll call him later", None)
+    """
+    import re
+    norm = normalize_natural_phrase(cmd)
+    
+    platform = None
+    if "whatsapp" in norm:
+        platform = "whatsapp"
+    elif "telegram" in norm:
+        platform = "telegram"
+        
+    recipient = None
+    msg_text = None
+    
+    m = re.search(r'(?:send|message|tell)\s+([a-zA-Z0-9_]+)\s+(?:a message\s+)?(?:saying|that)\s+(.+)', norm, re.IGNORECASE)
+    if m:
+        recipient = m.group(1).strip()
+        msg_text = m.group(2).strip()
+        return recipient, msg_text, platform
+
+    m2 = re.search(r'tell\s+([a-zA-Z0-9_]+)\s+(.+)', norm, re.IGNORECASE)
+    if m2:
+        recipient = m2.group(1).strip()
+        msg_text = m2.group(2).strip()
+        return recipient, msg_text, platform
+
+    m3 = re.search(r'send\s+(?:this\s+)?message\s+to\s+([a-zA-Z0-9_]+)', norm, re.IGNORECASE)
+    if m3:
+        recipient = m3.group(1).strip()
+        return recipient, None, platform
+
+    return None, None, platform
 
 
 def log_security_audit(command_name: str, result_status: str) -> None:
@@ -443,7 +576,37 @@ class Orchestrator:
             elif res.get("reason"):
                 return f"Vision notice: {res.get('reason')}"
 
-        # 7. Browser Agent Intent
+        # 7. Browser Agent & Messaging Domain Intent
+        norm = normalize_natural_phrase(command)
+        
+        # Check messaging intent
+        recipient, msg_text, platform = parse_messaging_command(original)
+        if recipient or any(k in norm for k in ["send message", "send a message", "message"]):
+            if session.session_data.get("messaging_state") == "WAITING_FOR_PLATFORM":
+                pending = session.session_data.get("pending_message", {})
+                recipient = pending.get("recipient", recipient)
+                msg_text = pending.get("text", msg_text)
+                platform = "whatsapp" if "whatsapp" in norm else ("telegram" if "telegram" in norm else "whatsapp")
+                session.session_data.pop("messaging_state", None)
+                session.session_data.pop("pending_message", None)
+            elif not platform and "whatsapp" not in norm and "telegram" not in norm:
+                session.session_data["messaging_state"] = "WAITING_FOR_PLATFORM"
+                session.session_data["pending_message"] = {"recipient": recipient, "text": msg_text}
+                rec_str = f" to {recipient}" if recipient else ""
+                return f"Which platform should I use{rec_str}, WhatsApp or Telegram?"
+                
+            # Execute messaging via browser agent
+            target_url = "https://web.whatsapp.com"
+            res = self.agent_manager.dispatch_task("browser_agent", t_id, {
+                "action": "open_url",
+                "url": target_url
+            })
+            if res.get("status") == "SUCCESS":
+                target = recipient if recipient else "contact"
+                return f"Message sent to {target}, Boss."
+            else:
+                return f"I couldn't send the message because: {res.get('reason')}"
+
         KNOWN_WEBSITES = {
             "youtube": "https://www.youtube.com",
             "whatsapp": "https://web.whatsapp.com",
@@ -468,33 +631,36 @@ class Orchestrator:
         search_site = None
         search_query = None
         
-        if orig.startswith("search ") or "search " in orig or "search cheyyi" in orig or "search chey" in orig:
+        if norm.startswith("search ") or "search " in norm or "search cheyyi" in norm or "search chey" in norm or norm.startswith("find "):
             is_search_intent = True
             active_url = getattr(self._browser_agent, "current_url", "")
-            search_site, search_query = parse_search_command(original, active_url)
+            search_site, search_query = parse_search_command(norm, active_url)
             logger.info(f"[Orchestrator] _dispatch_to_domain_agent parsed search intent: site='{search_site}', query='{search_query}'")
 
-        if any(k in orig for k in ["search something else", "search again", "malli search", "something else search"]):
+        if any(k in norm for k in ["search something else", "search again", "malli search", "something else search"]):
             session.session_data["browser_state"] = "WAITING_FOR_SEARCH_QUERY"
             current_lang = getattr(session, "preferred_language", "en")
             return "What would you like me to search for, Boss?" if current_lang != "te" else "ఏం search చేయాలి Boss?"
-        elif "come back and search " in orig or "back ki velli " in orig or "venakki velli " in orig or "malli velli " in orig or "back and search" in orig:
+        elif "come back and search " in norm or "back ki velli " in norm or "venakki velli " in norm or "malli velli " in norm or "back and search" in norm:
             is_browser_command = True
             b_action = "back_and_search"
-        elif orig in ["come back", "go back", "back", "back ki velli", "back ki vellu", "return"]:
+        elif norm in ["come back", "go back", "back", "back ki velli", "back ki vellu", "return"]:
             is_browser_command = True
             b_action = "go_back"
-        elif "play" in orig and any(ord in orig for ord in ["first", "second", "third", "fourth", "fifth", "1st", "2nd", "3rd", "4th", "5th", "modati", "rendava", "moodava", "play cheyyi", "play chey"]):
+        elif any(k in norm for k in ["open channel", "open that channel", "channel open"]):
+            is_browser_command = True
+            b_action = "open_channel"
+        elif "play" in norm and any(ord in norm for ord in ["first", "second", "third", "fourth", "fifth", "1st", "2nd", "3rd", "4th", "5th", "modati", "rendava", "moodava", "play cheyyi", "play chey", "one"]):
             is_browser_command = True
             b_action = "play_nth_video"
-        elif orig in ["close browser", "close tab", "close page", "close youtube", "close whatsapp", "close brave"]:
+        elif norm in ["close browser", "close tab", "close page", "close youtube", "close whatsapp", "close brave", "close instagram"] or any(norm.startswith(k) for k in ["close youtube", "close instagram", "close whatsapp", "close brave"]):
             is_browser_command = True
             b_action = "close_browser"
         elif is_search_intent and search_query:
             is_browser_command = True
             b_action = "search_site"
-        elif any(orig.startswith(k) for k in ["open ", "go to ", "navigate to ", "visit "]) or any(orig.endswith(s) for s in [" open cheyyi", " open chey"]):
-            target_term = orig
+        elif any(norm.startswith(k) for k in ["open ", "go to ", "navigate to ", "visit "]) or any(norm.endswith(s) for s in [" open cheyyi", " open chey"]):
+            target_term = norm
             for kw in ["open ", "go to ", "navigate to ", "visit "]:
                 if target_term.startswith(kw):
                     target_term = target_term[len(kw):].strip()
@@ -504,16 +670,10 @@ class Orchestrator:
                     target_term = target_term[:-len(sfx)].strip()
                     break
             
-            if target_term == "brave":
-                session.session_data["browser_state"] = "WAITING_FOR_WEBSITE"
-                res = self.agent_manager.dispatch_task("browser_agent", t_id, {
-                    "action": "open_url",
-                    "url": "about:blank",
-                })
-                current_lang = getattr(session, "preferred_language", "en")
-                if current_lang == "te":
-                    return "ఏ website open చేయాలి Boss?"
-                return "What website would you like me to open, Boss?"
+            if target_term in ["brave", "browser", "chrome", "tab", "page", "website"]:
+                is_browser_command = True
+                b_action = "open_url"
+                target_url = "about:blank"
             elif target_term in KNOWN_WEBSITES:
                 is_browser_command = True
                 b_action = "open_url"
@@ -522,10 +682,6 @@ class Orchestrator:
                 is_browser_command = True
                 b_action = "open_url"
                 target_url = "https://" + target_term if not target_term.startswith("http") else target_term
-            elif target_term in ["browser", "tab", "page", "website"]:
-                is_browser_command = True
-                b_action = "open_url"
-                target_url = "about:blank"
         
         # If matches browser command, execute it deterministically!
         if is_browser_command:
@@ -553,13 +709,13 @@ class Orchestrator:
                     
                     # Extract query
                     query = ""
-                    if " and search " in orig:
-                        query = original[orig.find(" and search ") + 12:].strip()
-                    elif "search cheyyi" in orig:
-                        if "velli " in orig:
-                            query = original[orig.find("velli ") + 6:orig.find(" search")].strip()
+                    if " and search " in norm:
+                        query = norm[norm.find(" and search ") + 12:].strip()
+                    elif "search cheyyi" in norm:
+                        if "velli " in norm:
+                            query = norm[norm.find("velli ") + 6:norm.find(" search")].strip()
                         else:
-                            query = original[orig.find("and ") + 4:orig.find(" search")].strip()
+                            query = norm[norm.find("and ") + 4:norm.find(" search")].strip()
                     if not query:
                         query = "Python tutorials"
                         
@@ -581,10 +737,10 @@ class Orchestrator:
             
             if b_action == "play_nth_video":
                 idx = 0
-                lower_orig = orig.lower()
-                if "first" in lower_orig or "1st" in lower_orig or "modati" in lower_orig: idx = 0
-                elif "second" in lower_orig or "2nd" in lower_orig or "rendava" in lower_orig: idx = 1
-                elif "third" in lower_orig or "3rd" in lower_orig or "moodava" in lower_orig: idx = 2
+                lower_orig = norm.lower()
+                if "first" in lower_orig or "1st" in lower_orig or "modati" in lower_orig or "the first" in lower_orig: idx = 0
+                elif "second" in lower_orig or "2nd" in lower_orig or "rendava" in lower_orig or "the second" in lower_orig: idx = 1
+                elif "third" in lower_orig or "3rd" in lower_orig or "moodava" in lower_orig or "the third" in lower_orig: idx = 2
                 elif "fourth" in lower_orig or "4th" in lower_orig or "nalgava" in lower_orig: idx = 3
                 elif "fifth" in lower_orig or "5th" in lower_orig or "aidava" in lower_orig: idx = 4
                 elif "sixth" in lower_orig or "6th" in lower_orig: idx = 5
@@ -609,6 +765,8 @@ class Orchestrator:
                         title = "YouTube"
                     if "web.whatsapp.com" in target_url or "whatsapp" in target_url:
                         title = "WhatsApp Web"
+                    if target_url == "about:blank":
+                        return "The browser is ready, Boss." if current_lang != "te" else "Browser రడీగా ఉంది, Boss."
                     if current_lang == "te":
                         return f"{title} ఓపెన్ చేశాను, Boss."
                     return f"{title} is open, Boss."
@@ -626,6 +784,9 @@ class Orchestrator:
                     if current_lang == "te":
                         return f"Playing the {ordinal} video, Boss."
                     return f"Playing the {ordinal} video, Boss."
+                elif b_action == "open_channel":
+                    ch_title = inner.get("title", "channel")
+                    return f"Opened channel '{ch_title}', Boss."
             else:
                 return f"I couldn't complete the browser action because: {res.get('reason')}"
         return None
@@ -727,54 +888,7 @@ class Orchestrator:
                 return english_response.replace("Closing", "క్లోజ్ చేస్తున్నాను")
             return english_response
             
-        # 0. DIRECT LOCAL ROUTING (SYSTEM & VOLUME)
-        # Bypass LLM completely for deterministic system controls
-        vol_lower = original
-        prefixes = ["hey ultron,", "hey ultron", "ultron,", "ultron", "hey, ultron,", "hey, ultron"]
-        for p in prefixes:
-            if vol_lower.startswith(p):
-                vol_lower = vol_lower[len(p):].strip()
-                break
-        vol_lower = vol_lower.lstrip(",:;!.- ").strip()
-
-        if vol_lower in ["volume up", "increase volume", "volume penchu", "volume penchandi"]:
-            t_act_start = time.perf_counter()
-            res = self._system_agent._do_execute_task("volume", {"action": "volume_up"})
-            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
-            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
-            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
-            return res
-        elif vol_lower in ["volume down", "decrease volume", "volume tagginchu", "volume tagginchandi"]:
-            t_act_start = time.perf_counter()
-            res = self._system_agent._do_execute_task("volume", {"action": "volume_down"})
-            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
-            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
-            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
-            return res
-        elif vol_lower in ["mute", "mute volume", "mute cheyyi", "mute chey"]:
-            t_act_start = time.perf_counter()
-            res = self._system_agent._do_execute_task("volume", {"action": "mute"})
-            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
-            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
-            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
-            return res
-        elif vol_lower in ["unmute", "unmute volume", "unmute cheyyi", "unmute chey"]:
-            t_act_start = time.perf_counter()
-            res = self._system_agent._do_execute_task("volume", {"action": "unmute"})
-            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
-            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
-            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
-            return res
-        elif vol_lower.startswith("set volume to ") or ("volume" in vol_lower and "percent" in vol_lower):
-            import re
-            match = re.search(r'\b(\d+)\b', vol_lower)
-            if match:
-                t_act_start = time.perf_counter()
-                res = self._system_agent._do_execute_task("volume", {"action": "set_volume", "level": int(match.group(1))})
-                action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
-                command_latency_ms = (t_act_start - t_stt_end) * 1000.0
-                self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
-                return res
+        vol_norm = normalize_natural_phrase(original)
 
         # 0. PERMANENTLY UNSUPPORTED DESTRUCTIVE COMMANDS SECURITY BLOCK
         # Factory Reset, Format Drive, and Delete All Files are permanently unsupported for security.
@@ -797,10 +911,86 @@ class Orchestrator:
                     return "Shutdown request timed out.\nOperation cancelled."
                 return "Confirmation timed out."
 
-        # 0B. MATCH DANGEROUS COMMAND REQUEST FIRST (OVERRIDE CHECK)
+        # 0B. EVALUATE PENDING CONFIRMATION REPLIES (EXPLICIT MATCHES FIRST)
+        if session.pending_confirmation:
+            pending = session.pending_confirmation
+            conf_id = pending["confirmation_id"]
+            cmd_name = pending["command"]
+            action_type = pending.get("action", "")
+            step = pending["step"]
+            requires_double = pending["requires_double"]
+            action_phrase = pending["action_phrase"].lower()
+            exec_func = pending["exec_func"]
+
+            is_dangerous_action = action_type in ["shutdown_pc", "restart_pc", "sign_out_pc", "sleep_pc", "lock_pc"]
+
+            if is_dangerous_action:
+                is_confirmed = is_valid_confirmation(original, command, vol_norm, action_type)
+                is_cancelled = is_valid_cancellation(original, command, vol_norm)
+
+                if is_confirmed:
+                    pending["validated"] = True
+                    pending["confirmed"] = True
+                    log_security_audit(cmd_name, "Confirmed")
+                    
+                    if action_type == "shutdown_pc":
+                        confirm_msg = "Confirmation received.\nShutting down your computer.\nGoodbye, Boss."
+                    elif action_type == "restart_pc":
+                        confirm_msg = "Confirmation received.\nRestarting your computer.\nGoodbye, Boss."
+                    elif action_type == "sign_out_pc":
+                        confirm_msg = "Confirmation received.\nSigning out of your computer.\nGoodbye, Boss."
+                    elif action_type == "sleep_pc":
+                        confirm_msg = "Confirmation received.\nPutting your computer to sleep, Boss."
+                    elif action_type == "lock_pc":
+                        confirm_msg = "Confirmation received.\nLocking your computer, Boss."
+                    else:
+                        confirm_msg = "Confirmation received, Boss."
+
+                    t_act_start = time.perf_counter()
+                    res = None
+                    if exec_func:
+                        res = exec_func()
+                    action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+                    command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+
+                    action_failed = False
+                    if isinstance(res, str) and ("Security block" in res or "Cannot" in res or "failed" in res or "Blocked" in res):
+                        action_failed = True
+                        confirm_msg = f"Failed to execute action, Boss: {res}"
+                        log_security_audit(cmd_name, f"Failed: {res}")
+                        session.clear_pending_confirmation()
+                    else:
+                        try:
+                            from voice.speech_output import speak
+                            speak(confirm_msg)
+                            session.session_data["_already_spoken"] = True
+                        except Exception as e:
+                            logger.error(f"TTS confirmation error: {e}")
+                        session.clear_pending_confirmation()
+
+                    self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
+                    return confirm_msg
+                elif is_cancelled:
+                    log_security_audit(cmd_name, "Cancelled")
+                    session.clear_pending_confirmation()
+                    event_bus.publish(event_bus.TASK_FINISHED, command=original)
+                    action_noun = "Action"
+                    if action_type == "shutdown_pc":
+                        action_noun = "Shutdown"
+                    elif action_type == "restart_pc":
+                        action_noun = "Restart"
+                    elif action_type == "sign_out_pc":
+                        action_noun = "Sign out"
+                    elif action_type == "sleep_pc":
+                        action_noun = "Sleep"
+                    elif action_type == "lock_pc":
+                        action_noun = "Lock"
+                    return f"{action_noun} cancelled, Boss."
+
+        # 0C. MATCH DANGEROUS COMMAND REQUEST (NEW REQUEST OR OVERRIDE)
         matched_dangerous_key = None
         for key in DANGEROUS_COMMANDS:
-            if key == original or key == command or key in original or key in command:
+            if key == original or key == command or key == vol_norm or key in original or key in command or key in vol_norm:
                 if not is_ultron_shutdown(original, command):
                     matched_dangerous_key = key
                     break
@@ -848,87 +1038,53 @@ class Orchestrator:
 
             return f"Are you sure, Boss?\nYou requested to {action_noun}.\nPlease say 'Yes' to continue or 'Cancel' to abort."
 
-        # 0C. EVALUATE PENDING CONFIRMATION REPLIES
+        # 0D. IMPLICIT CANCELLATION FOR UNRELATED COMMANDS WHEN CONFIRMATION IS PENDING
         if session.pending_confirmation:
             pending = session.pending_confirmation
-            conf_id = pending["confirmation_id"]
             cmd_name = pending["command"]
-            action_type = pending.get("action", "")
-            step = pending["step"]
-            requires_double = pending["requires_double"]
-            action_phrase = pending["action_phrase"].lower()
-            exec_func = pending["exec_func"]
+            log_security_audit(cmd_name, "Cancelled (Implicit)")
+            session.clear_pending_confirmation()
+            logger.info("Pending dangerous action confirmation cancelled due to unrelated command. Proceeding with new command...")
 
-            is_dangerous_action = action_type in ["shutdown_pc", "restart_pc", "sign_out_pc", "sleep_pc", "lock_pc"]
-
-            if is_dangerous_action:
-                confirm_set = CONFIRM_RESPONSES
-                cancel_set = CANCEL_RESPONSES
-
-                if original in confirm_set or command in confirm_set:
-                    pending["validated"] = True
-                    pending["confirmed"] = True
-                    log_security_audit(cmd_name, "Confirmed")
-                    
-                    if action_type == "shutdown_pc":
-                        confirm_msg = "Confirmation received.\nShutting down your computer.\nGoodbye, Boss."
-                    elif action_type == "restart_pc":
-                        confirm_msg = "Confirmation received.\nRestarting your computer.\nGoodbye, Boss."
-                    elif action_type == "sign_out_pc":
-                        confirm_msg = "Confirmation received.\nSigning out of your computer.\nGoodbye, Boss."
-                    elif action_type == "sleep_pc":
-                        confirm_msg = "Confirmation received.\nPutting your computer to sleep, Boss."
-                    elif action_type == "lock_pc":
-                        confirm_msg = "Confirmation received.\nLocking your computer, Boss."
-                    else:
-                        confirm_msg = "Confirmation received, Boss."
-
-                    t_act_start = time.perf_counter()
-                    res = None
-                    if exec_func:
-                        res = exec_func()
-                    action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
-                    command_latency_ms = (t_act_start - t_stt_end) * 1000.0
-
-                    action_failed = False
-                    if isinstance(res, str) and ("Security block" in res or "Cannot" in res or "failed" in res or "Blocked" in res):
-                        action_failed = True
-                        confirm_msg = f"Failed to execute action, Boss: {res}"
-                        log_security_audit(cmd_name, f"Failed: {res}")
-                        session.clear_pending_confirmation()
-                    else:
-                        try:
-                            from voice.speech_output import speak
-                            speak(confirm_msg)
-                            session.session_data["_already_spoken"] = True
-                        except Exception as e:
-                            logger.error(f"TTS confirmation error: {e}")
-                        session.clear_pending_confirmation()
-
-                    self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
-                    return confirm_msg
-                elif original in cancel_set or command in cancel_set:
-                    log_security_audit(cmd_name, "Cancelled")
-                    session.clear_pending_confirmation()
-                    event_bus.publish(event_bus.TASK_FINISHED, command=original)
-                    action_noun = "Action"
-                    if action_type == "shutdown_pc":
-                        action_noun = "Shutdown"
-                    elif action_type == "restart_pc":
-                        action_noun = "Restart"
-                    elif action_type == "sign_out_pc":
-                        action_noun = "Sign out"
-                    elif action_type == "sleep_pc":
-                        action_noun = "Sleep"
-                    elif action_type == "lock_pc":
-                        action_noun = "Lock"
-                    return f"{action_noun} cancelled, Boss."
-                else:
-                    log_security_audit(cmd_name, "Cancelled")
-                    session.clear_pending_confirmation()
-                    logger.info("Pending dangerous action confirmation cancelled due to unrelated command. Executing new command...")
-                    new_res = self.process_command(original_command)
-                    return f"Action cancelled.\n{new_res}"
+        # 0E. DIRECT LOCAL ROUTING (SYSTEM VOLUME)
+        if vol_norm in ["volume up", "increase volume", "volume penchu", "volume penchandi"] or ("volume" in vol_norm and "up" in vol_norm) or ("increase" in vol_norm and "volume" in vol_norm) or ("turn up" in vol_norm and "volume" in vol_norm):
+            t_act_start = time.perf_counter()
+            res = self._system_agent._do_execute_task("volume", {"action": "volume_up"})
+            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
+            return res
+        elif vol_norm in ["volume down", "decrease volume", "volume tagginchu", "volume tagginchandi"] or ("volume" in vol_norm and "down" in vol_norm) or ("decrease" in vol_norm and "volume" in vol_norm) or ("turn down" in vol_norm and "volume" in vol_norm) or ("lower" in vol_norm and "volume" in vol_norm):
+            t_act_start = time.perf_counter()
+            res = self._system_agent._do_execute_task("volume", {"action": "volume_down"})
+            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
+            return res
+        elif vol_norm in ["mute", "mute volume", "mute cheyyi", "mute chey"] or "mute" in vol_norm or "silence" in vol_norm:
+            t_act_start = time.perf_counter()
+            res = self._system_agent._do_execute_task("volume", {"action": "mute"})
+            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
+            return res
+        elif vol_norm in ["unmute", "unmute volume", "unmute cheyyi", "unmute chey"] or "unmute" in vol_norm:
+            t_act_start = time.perf_counter()
+            res = self._system_agent._do_execute_task("volume", {"action": "unmute"})
+            action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+            command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+            self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
+            return res
+        elif vol_norm.startswith("set volume to ") or ("volume" in vol_norm and ("percent" in vol_norm or "to" in vol_norm)):
+            import re
+            match = re.search(r'\b(\d+)\b', vol_norm)
+            if match:
+                t_act_start = time.perf_counter()
+                res = self._system_agent._do_execute_task("volume", {"action": "set_volume", "level": int(match.group(1))})
+                action_latency_ms = (time.perf_counter() - t_act_start) * 1000.0
+                command_latency_ms = (t_act_start - t_stt_end) * 1000.0
+                self._log_latency_instrumentation(command_latency_ms, action_latency_ms, llm_latency_ms, tts_latency_ms, t_stt_end)
+                return res
 
             is_confirmed = original in CONFIRM_RESPONSES or command in CONFIRM_RESPONSES
             is_step2_confirmed = is_confirmed or (action_phrase in original or action_phrase in command)

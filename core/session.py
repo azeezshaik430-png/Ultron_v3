@@ -69,7 +69,9 @@ class SessionManager:
                 "payload": payload,
                 "step": 1,
                 "created_at": now,
+                "input_window_started_at": None,
                 "expires_at": now + timeout_seconds,
+                "timeout_seconds": timeout_seconds,
                 "validated": False,
                 "confirmed": False,
                 "requires_double": requires_double,
@@ -78,6 +80,15 @@ class SessionManager:
             }
             self.pending_confirmation = data
             return data
+
+    def mark_confirmation_input_window_started(self) -> None:
+        """Mark that confirmation prompt playback is complete and start 15s input window."""
+        with self._lock:
+            if self.pending_confirmation:
+                now = time.time()
+                timeout = self.pending_confirmation.get("timeout_seconds", 15.0)
+                self.pending_confirmation["input_window_started_at"] = now
+                self.pending_confirmation["expires_at"] = now + timeout
 
     def clear_pending_confirmation(self) -> None:
         """Completely destroy active pending confirmation token (In-Memory Only)."""
@@ -91,10 +102,10 @@ class SessionManager:
                 return False
             now = time.time()
             expires_at = self.pending_confirmation.get("expires_at")
-            created_at = self.pending_confirmation.get("created_at", 0)
+            start_at = self.pending_confirmation.get("input_window_started_at") or self.pending_confirmation.get("created_at", now)
             if expires_at and now > expires_at:
                 return True
-            if created_at and (now - created_at) > timeout_seconds:
+            if (now - start_at) > timeout_seconds:
                 return True
             return False
 

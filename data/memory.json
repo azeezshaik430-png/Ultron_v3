@@ -1,10 +1,8 @@
 {
-    "name": "azeez",
-    "likes": "coding",
-    "favorite_game": "palworld",
-    "laptop": "HP Victus 15",
-    "phone": "iQOO Neo 10",
-    "project": "ULTRON V3 AI",
-    "test": "working",
-    "favorite_movie": "avengers"
+    "name": "Azeez",
+    "laptop": "Dell XPS",
+    "phone": "iPhone 15 Pro",
+    "project": "ULTRON V3",
+    "likes": "Coding and AI",
+    "cp_test_key": "cp_test_value"
 }

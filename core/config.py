@@ -18,6 +18,9 @@ class Config:
     OWNER_NAME: str = "Boss"
     VERSION: str = "3.0"
     DANGEROUS_COMMANDS_ENABLED: bool = False
+    SAFE_PHYSICAL_TEST_MODE: bool = field(
+        default_factory=lambda: os.getenv("SAFE_PHYSICAL_TEST_MODE", "true").lower() in ["true", "1", "yes"]
+    )
 
     # AI Model Settings
     DEFAULT_LLM_PROVIDER: str = "ollama"

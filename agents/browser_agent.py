@@ -107,6 +107,8 @@ class BrowserAgent(BaseUltronAgent):
                 res = self._go_back(payload)
             elif action in ["play_nth_video"]:
                 res = self._play_nth_video(payload)
+            elif action in ["open_channel", "channel"]:
+                res = self._open_channel(payload)
             elif action in ["get_url", "url"]:
                 res = self._get_url()
             else:
@@ -229,12 +231,14 @@ class BrowserAgent(BaseUltronAgent):
             if ".." in file_path:
                 return False
             return os.path.exists(file_path)
-        return parsed.scheme in ["http", "https", ""]
+        return parsed.scheme in ["http", "https", "about", ""]
 
     def _open_url(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Navigate Playwright browser to specified URL."""
         url = payload.get("url") or payload.get("target") or "https://example.com"
-        if not url.startswith("http://") and not url.startswith("https://") and not url.startswith("file://"):
+        if url in ["about:blank", "blank", "browser", "about:blank"]:
+            url = "about:blank"
+        elif not url.startswith("http://") and not url.startswith("https://") and not url.startswith("file://") and not url.startswith("about:"):
             url = f"https://{url}"
 
         if not self._validate_url(url):
@@ -511,6 +515,28 @@ class BrowserAgent(BaseUltronAgent):
                     "available": False,
                     "reason": f"Failed to play video result: {e}",
                 }
+
+    def _open_channel(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Locate and click channel link on active YouTube page."""
+        if not self._page_instance or self._page_instance.is_closed():
+            return {"status": "ERROR", "available": False, "reason": "No active page session."}
+        try:
+            selectors = [
+                "ytd-video-owner-renderer a#channel-name",
+                "ytd-channel-name a",
+                "a.yt-simple-endpoint.ytd-video-owner-renderer",
+                "#owner #channel-name a"
+            ]
+            for sel in selectors:
+                loc = self._page_instance.locator(sel)
+                if loc.count() > 0:
+                    ch_name = loc.first.text_content().strip() if loc.first.text_content() else "Channel"
+                    loc.first.click(timeout=5000)
+                    self._active_url = self._page_instance.url
+                    return {"status": "SUCCESS", "available": True, "title": ch_name, "result": f"Opened channel '{ch_name}'."}
+            return {"status": "ERROR", "available": False, "reason": "Could not locate channel link on current page."}
+        except Exception as e:
+            return {"status": "ERROR", "available": False, "reason": f"Failed to open channel: {e}"}
 
     def _click_element(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Click specified element selector on active page with security check."""

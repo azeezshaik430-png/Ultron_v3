@@ -132,12 +132,18 @@ def shutdown_pc():
     Execute OS Shutdown sequence.
     """
     from core.session import session
+    from core.config import config
+    from core.logger import logger
     
     if not _validate_security_token("shutdown_pc"):
         return "Security block: Unauthorized Shutdown Blocked"
 
     # REPLAY PROTECTION: Completely destroy token confirmation object IMMEDIATELY
     session.clear_pending_confirmation()
+
+    if getattr(config, "SAFE_PHYSICAL_TEST_MODE", False):
+        logger.info("[SAFE PHYSICAL TEST MODE] Bypassing OS execution for shutdown_pc.")
+        return "SAFE PHYSICAL TEST MODE: Shutdown confirmed successfully Boss. (Physical OS execution bypassed for testing)"
 
     result = _adapter().shutdown(delay_sec=5)
     if result.get("available"):
@@ -148,11 +154,17 @@ def shutdown_pc():
 
 def restart_pc():
     from core.session import session
+    from core.config import config
+    from core.logger import logger
     
     if not _validate_security_token("restart_pc"):
         return "Security block: Unauthorized Restart Blocked"
 
     session.clear_pending_confirmation()
+
+    if getattr(config, "SAFE_PHYSICAL_TEST_MODE", False):
+        logger.info("[SAFE PHYSICAL TEST MODE] Bypassing OS execution for restart_pc.")
+        return "SAFE PHYSICAL TEST MODE: Restart confirmed successfully Boss. (Physical OS execution bypassed for testing)"
 
     result = _adapter().restart(delay_sec=5)
     if result.get("available"):
@@ -164,11 +176,17 @@ def restart_pc():
 def sign_out_pc():
     """Sign out of the current user session."""
     from core.session import session
+    from core.config import config
+    from core.logger import logger
     
     if not _validate_security_token("sign_out_pc"):
         return "Security block: Unauthorized Sign Out Blocked"
 
     session.clear_pending_confirmation()
+
+    if getattr(config, "SAFE_PHYSICAL_TEST_MODE", False):
+        logger.info("[SAFE PHYSICAL TEST MODE] Bypassing OS execution for sign_out_pc.")
+        return "SAFE PHYSICAL TEST MODE: Sign-out confirmed successfully Boss. (Physical OS execution bypassed for testing)"
 
     result = _adapter().sign_out()
     if result.get("available"):
@@ -179,9 +197,16 @@ def sign_out_pc():
 
 def sleep_pc():
     from core.session import session
+    from core.config import config
+    from core.logger import logger
     if not _validate_security_token("sleep_pc"):
         return "Security block: Unauthorized Sleep Blocked"
     session.clear_pending_confirmation()
+
+    if getattr(config, "SAFE_PHYSICAL_TEST_MODE", False):
+        logger.info("[SAFE PHYSICAL TEST MODE] Bypassing OS execution for sleep_pc.")
+        return "SAFE PHYSICAL TEST MODE: Sleep confirmed successfully Boss. (Physical OS execution bypassed for testing)"
+
     result = _adapter().sleep()
     if result.get("available"):
         return result.get("result", "Going to sleep mode Boss.")

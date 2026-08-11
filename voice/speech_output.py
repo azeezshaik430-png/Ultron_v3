@@ -47,6 +47,8 @@ def clean_voice_text(text: str) -> str:
     text = str(text)
     text = re.sub(r"[*#_`]", "", text)
     text = text.replace("-", " ")
+    # Format Boss suffix smoothly without punctuation pauses
+    text = re.sub(r"[,.\n!]+\s*Boss\b", " Boss", text, flags=re.IGNORECASE)
     text = " ".join(text.split())
     return text
 
@@ -82,14 +84,18 @@ def _get_piper_telugu_voice():
                 onnx_url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/te/te_IN/venkatesh/medium/te_IN-venkatesh-medium.onnx"
                 json_url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/te/te_IN/venkatesh/medium/te_IN-venkatesh-medium.onnx.json"
                 req1 = urllib.request.Request(onnx_url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req1) as resp, open(model_path, "wb") as f:
+                with urllib.request.urlopen(req1, timeout=10.0) as resp, open(model_path, "wb") as f:
                     f.write(resp.read())
                 req2 = urllib.request.Request(json_url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req2) as resp, open(json_path, "wb") as f:
+                with urllib.request.urlopen(req2, timeout=10.0) as resp, open(json_path, "wb") as f:
                     f.write(resp.read())
                 logger.info("[VoiceOutput] Piper Telugu model downloaded successfully.")
             except Exception as d_err:
-                logger.error(f"[VoiceOutput] Failed to download Piper Telugu model: {d_err}")
+                logger.warning(f"[VoiceOutput] Failed to download Piper Telugu model (offline/timeout): {d_err}")
+                if os.path.exists(model_path) and os.path.getsize(model_path) == 0:
+                    os.remove(model_path)
+                if os.path.exists(json_path) and os.path.getsize(json_path) == 0:
+                    os.remove(json_path)
                 return None
 
         try:
@@ -109,7 +115,7 @@ def is_telugu_text(text: str) -> bool:
     return any(ord('\u0c00') <= ord(char) <= ord('\u0c7f') for char in text)
 
 
-def speak(text: str, language: str = None) -> bool:
+def speak(text: str, language: str = None, allow_interruption: bool = True) -> bool:
     """
     Synthesize and speak text with sub-second interrupt support and real audio output.
     Routes to Microsoft David (English MALE) or Piper te_IN-venkatesh-medium (Telugu MALE).
@@ -134,7 +140,8 @@ def speak(text: str, language: str = None) -> bool:
     _speaking_flag.set()
 
     from voice.speech_input import start_interruption_listener, stop_interruption_listener
-    start_interruption_listener()
+    if allow_interruption:
+        start_interruption_listener()
 
     try:
         if language == "te":

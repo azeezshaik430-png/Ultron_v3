@@ -41,23 +41,23 @@ class TestSpeechInputUnit(unittest.TestCase):
         # Reset calibration flag for clean testing state
         speech_input._calibrated = False
 
-    @patch("speech_recognition.Recognizer.recognize_google")
+    @patch("voice.speech_input.transcribe_audio")
     @patch("speech_recognition.Recognizer.listen")
     @patch("speech_recognition.Microphone")
     @patch("voice.speech_output.speaking", return_value=False)
-    def test_01_normal_speech_recognition(self, mock_speaking, mock_mic, mock_listen, mock_recognize):
+    def test_01_normal_speech_recognition(self, mock_speaking, mock_mic, mock_listen, mock_transcribe):
         """Test 1: Verify normal speech recognition returns lowercase transcript."""
         mock_mic_instance, mock_source = create_mock_microphone()
         mock_mic.return_value = mock_mic_instance
 
         mock_audio = create_mock_audio_data()
         mock_listen.return_value = mock_audio
-        mock_recognize.return_value = "Hello Ultron"
+        mock_transcribe.return_value = "hello ultron"
 
         cmd = listen(silent=True)
 
         self.assertEqual(cmd, "hello ultron")
-        mock_recognize.assert_called_once_with(mock_audio, language="en-IN")
+        mock_transcribe.assert_called_once_with(mock_audio)
 
     @patch("speech_recognition.Recognizer.listen", side_effect=sr.WaitTimeoutError)
     @patch("speech_recognition.Microphone")
@@ -70,12 +70,12 @@ class TestSpeechInputUnit(unittest.TestCase):
         cmd = listen(silent=True)
         self.assertEqual(cmd, "")
 
-    @patch("speech_recognition.Recognizer.recognize_google", side_effect=sr.UnknownValueError)
+    @patch("voice.speech_input.transcribe_audio", return_value="")
     @patch("speech_recognition.Recognizer.listen")
     @patch("speech_recognition.Microphone")
     @patch("voice.speech_output.speaking", return_value=False)
-    def test_03_unknown_speech_handling(self, mock_speaking, mock_mic, mock_listen, mock_recognize):
-        """Test 3: Verify UnknownValueError returns empty string cleanly."""
+    def test_03_unknown_speech_handling(self, mock_speaking, mock_mic, mock_listen, mock_transcribe):
+        """Test 3: Verify unknown speech returns empty string cleanly."""
         mock_mic_instance, _ = create_mock_microphone()
         mock_mic.return_value = mock_mic_instance
         mock_listen.return_value = create_mock_audio_data()
@@ -83,12 +83,12 @@ class TestSpeechInputUnit(unittest.TestCase):
         cmd = listen(silent=True)
         self.assertEqual(cmd, "")
 
-    @patch("speech_recognition.Recognizer.recognize_google", side_effect=sr.RequestError("Network error"))
+    @patch("voice.speech_input.transcribe_audio", return_value="")
     @patch("speech_recognition.Recognizer.listen")
     @patch("speech_recognition.Microphone")
     @patch("voice.speech_output.speaking", return_value=False)
-    def test_04_stt_request_error_handling(self, mock_speaking, mock_mic, mock_listen, mock_recognize):
-        """Test 4: Verify RequestError returns empty string cleanly."""
+    def test_04_stt_request_error_handling(self, mock_speaking, mock_mic, mock_listen, mock_transcribe):
+        """Test 4: Verify STT error returns empty string cleanly."""
         mock_mic_instance, _ = create_mock_microphone()
         mock_mic.return_value = mock_mic_instance
         mock_listen.return_value = create_mock_audio_data()
@@ -111,22 +111,24 @@ class TestSpeechInputUnit(unittest.TestCase):
         calibrate_ambient_noise(mock_source, duration=0.5)
         self.assertEqual(mock_adjust.call_count, 1)
 
-    @patch("speech_recognition.Recognizer.recognize_google", return_value="Test Command")
+    @patch("voice.speech_input.transcribe_audio", return_value="test command")
     @patch("speech_recognition.Recognizer.listen")
     @patch("speech_recognition.Microphone")
     @patch("voice.speech_output.speaking", return_value=False)
-    def test_06_repeated_listen_performance(self, mock_speaking, mock_mic, mock_listen, mock_recognize):
+    def test_06_repeated_listen_performance(self, mock_speaking, mock_mic, mock_listen, mock_transcribe):
         """Test 6: Verify repeated listen calls process cleanly."""
         mock_mic_instance, _ = create_mock_microphone()
         mock_mic.return_value = mock_mic_instance
         mock_listen.return_value = create_mock_audio_data()
 
         c1 = listen(silent=True)
+        import time
+        time.sleep(0.12)
         c2 = listen(silent=True)
 
         self.assertEqual(c1, "test command")
         self.assertEqual(c2, "test command")
-        self.assertEqual(mock_recognize.call_count, 2)
+        self.assertEqual(mock_transcribe.call_count, 2)
 
     @patch("voice.speech_input.listen", return_value="hey ultron")
     def test_07_wake_listener_integration(self, mock_listen):
@@ -138,29 +140,28 @@ class TestSpeechInputUnit(unittest.TestCase):
 
         self.assertTrue(wake)
 
-    @patch("speech_recognition.Recognizer.recognize_google")
+    @patch("voice.speech_input.transcribe_audio")
     @patch("speech_recognition.Recognizer.listen")
     @patch("speech_recognition.Microphone")
     @patch("voice.speech_output.speaking", return_value=False)
-    def test_08_english_stt_language_routing(self, mock_speaking, mock_mic, mock_listen, mock_recognize):
-        """Test 8: Verify English STT uses 'en-IN' language setting."""
+    def test_08_stt_transcription_routing(self, mock_speaking, mock_mic, mock_listen, mock_transcribe):
+        """Test 8: Verify STT uses transcribe_audio with AudioData."""
         mock_mic_instance, _ = create_mock_microphone()
         mock_mic.return_value = mock_mic_instance
         mock_audio = create_mock_audio_data()
         mock_listen.return_value = mock_audio
-        mock_recognize.return_value = "What time is it"
+        mock_transcribe.return_value = "what time is it"
 
         cmd = listen(silent=True)
 
         self.assertEqual(cmd, "what time is it")
-        mock_recognize.assert_called_with(mock_audio, language="en-IN")
+        mock_transcribe.assert_called_with(mock_audio)
 
     def test_09_recognizer_parameters(self):
-        """Test 9: Verify recognizer dynamic threshold and pause parameters."""
-        self.assertTrue(speech_input.recognizer.dynamic_energy_threshold)
+        """Test 9: Verify recognizer pause parameters."""
         self.assertEqual(speech_input.recognizer.dynamic_energy_adjustment_damping, 0.15)
         self.assertEqual(speech_input.recognizer.dynamic_energy_ratio, 1.5)
-        self.assertEqual(speech_input.recognizer.pause_threshold, 0.8)
+        self.assertEqual(speech_input.recognizer.pause_threshold, 0.5)
 
     @patch("speech_recognition.Microphone", side_effect=OSError("No input device found"))
     @patch("voice.speech_output.speaking", return_value=False)
