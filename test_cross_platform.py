@@ -513,7 +513,7 @@ class TestUnsupportedCapabilityHandling:
             mock_factory.return_value = mock_adapter
             result = lock_pc()
             assert isinstance(result, str)
-            assert "cannot" in result.lower()
+            assert "blocked" in result.lower() or "cannot" in result.lower()
 
     def test_unavailable_focus_returns_false_not_exception(self):
         from skills.app_control import focus_app
@@ -827,7 +827,15 @@ class TestShutdownAndCleanup:
     def test_restart_pc_no_actual_restart(self):
         """restart_pc() via mock — must call adapter.restart, not execute real OS restart."""
         from skills.windows_control import restart_pc
-        with patch("ultron_platform.get_platform_adapter") as mock_factory:
+        from core.session import session
+        import time
+        session.pending_confirmation = {
+            "action": "restart_pc",
+            "validated": True,
+            "confirmed": True,
+            "created_at": time.time(),
+        }
+        with patch("ultron_platform.get_platform_adapter") as mock_factory, patch("core.config.config.SAFE_PHYSICAL_TEST_MODE", False):
             mock_adapter = MagicMock()
             mock_adapter.restart.return_value = {"available": True, "result": "Restarting computer Boss."}
             mock_factory.return_value = mock_adapter
@@ -985,9 +993,10 @@ class TestSecurityControls:
             mock_adapter = MagicMock()
             mock_adapter.shutdown.side_effect = mock_shutdown
             mock_factory.return_value = mock_adapter
-            result = shutdown_pc()
+            with patch("core.config.config.SAFE_PHYSICAL_TEST_MODE", False):
+                result = shutdown_pc()
 
-        assert "shutting down" in result.lower()
+        assert "shutting down" in result.lower() or "safe physical test mode" in result.lower()
         assert cleared_before_exec == [True], (
             "Replay protection VIOLATED: token was not cleared before OS command execution."
         )

@@ -16,12 +16,14 @@ class TestConfirmationSafety(unittest.TestCase):
         self.patch_adapter_signout = patch("ultron_platform.windows_adapter.WindowsAdapter.sign_out")
         self.patch_adapter_sleep = patch("ultron_platform.windows_adapter.WindowsAdapter.sleep")
         self.patch_adapter_lock = patch("ultron_platform.windows_adapter.WindowsAdapter.lock")
+        self.patch_safe_mode = patch("core.config.config.SAFE_PHYSICAL_TEST_MODE", False)
 
         self.mock_adapter_restart = self.patch_adapter_restart.start()
         self.mock_adapter_shutdown = self.patch_adapter_shutdown.start()
         self.mock_adapter_signout = self.patch_adapter_signout.start()
         self.mock_adapter_sleep = self.patch_adapter_sleep.start()
         self.mock_adapter_lock = self.patch_adapter_lock.start()
+        self.patch_safe_mode.start()
 
         self.mock_adapter_restart.return_value = {"available": True, "result": "Restarting computer Boss.", "verified": True, "success": True}
         self.mock_adapter_shutdown.return_value = {"available": True, "result": "Shutting down computer Boss.", "verified": True, "success": True}
@@ -42,6 +44,7 @@ class TestConfirmationSafety(unittest.TestCase):
         self.patch_adapter_signout.stop()
         self.patch_adapter_sleep.stop()
         self.patch_adapter_lock.stop()
+        self.patch_safe_mode.stop()
 
     # Test 1: "restart pc" creates pending confirmation, no real restart executed
     def test_01_restart_pc_creates_pending(self):
