@@ -827,6 +827,7 @@ class Orchestrator:
             return "Waiting Boss"
 
         logger.info(f"Processing Command: '{original}' (cleaned: '{command}')")
+        event_bus.publish("SPEECH_RECOGNIZED", text=original_command)
 
         # Multi-Action Decomposition
         if " and " in original:

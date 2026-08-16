@@ -25,6 +25,19 @@ class SessionManager:
         self.session_data: Dict[str, Any] = {}
         self.pending_confirmation: Optional[Dict[str, Any]] = None
         self.preferred_language: str = "en"
+        self._confirmation_listeners: list = []
+
+    def register_confirmation_listener(self, callback: Any) -> None:
+        """Register a callback function to be invoked when a security confirmation is requested."""
+        with self._lock:
+            if callback not in self._confirmation_listeners:
+                self._confirmation_listeners.append(callback)
+
+    def unregister_confirmation_listener(self, callback: Any) -> None:
+        """Unregister a security confirmation callback function."""
+        with self._lock:
+            if callback in self._confirmation_listeners:
+                self._confirmation_listeners.remove(callback)
 
     def set_auth(self, status: bool) -> None:
         """Set voice authentication state in memory (Thread-safe)."""
@@ -79,6 +92,11 @@ class SessionManager:
                 "exec_func": exec_func,
             }
             self.pending_confirmation = data
+            for listener in list(self._confirmation_listeners):
+                try:
+                    listener(data)
+                except Exception:
+                    pass
             return data
 
     def mark_confirmation_input_window_started(self) -> None:

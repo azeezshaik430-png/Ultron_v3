@@ -27,12 +27,17 @@ class TestSubMilestone2B5(unittest.TestCase):
     def setUp(self) -> None:
         session.reset()
         if hasattr(self, 'patcher'): self.patcher.stop()
-        
+
         self.bus = orchestrator.bus
         self.manager = orchestrator.agent_manager
-        
+
         self.vision_agent = self.manager.get_agent("vision_agent")
         self.browser_agent = self.manager.get_agent("browser_agent")
+
+        # --- Ensure any prior instance-level patch is cleaned before re-patching ---
+        for agent in (self.vision_agent, self.browser_agent):
+            if agent is not None and 'execute_task' in agent.__dict__:
+                del agent.__dict__['execute_task']
 
         # Mock PIL ImageGrab for headless environments
         self.mock_image = MagicMock()
@@ -56,13 +61,21 @@ class TestSubMilestone2B5(unittest.TestCase):
                         return inner
                 return res
             agent.execute_task = wrapper
-            
-        patched_execute_task(self.vision_agent, self.vision_agent.execute_task)
-        patched_execute_task(self.browser_agent, self.browser_agent.execute_task)
+
+        # Capture the unpatched class method via the class (not the instance) so stacking never occurs
+        vision_orig = self.vision_agent.__class__.execute_task.__get__(self.vision_agent, self.vision_agent.__class__)
+        browser_orig = self.browser_agent.__class__.execute_task.__get__(self.browser_agent, self.browser_agent.__class__)
+        patched_execute_task(self.vision_agent, vision_orig)
+        patched_execute_task(self.browser_agent, browser_orig)
 
     def tearDown(self) -> None:
         session.reset()
         if hasattr(self, 'patcher'): self.patcher.stop()
+        # Remove instance-level execute_task overrides so the class method is restored
+        # for all subsequent tests in other test files that share the singleton agents.
+        for agent in (getattr(self, 'vision_agent', None), getattr(self, 'browser_agent', None)):
+            if agent is not None and 'execute_task' in agent.__dict__:
+                del agent.__dict__['execute_task']
 
     # =========================================================================
     # VISION AGENT TESTS (1 - 10)
