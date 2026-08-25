@@ -65,6 +65,27 @@ async def health_check():
     }
 
 
+@app.get("/api/memory")
+async def get_memories(limit: int = 20):
+    """
+    Hydration endpoint for UI MemoryRecall panel.
+    Returns bounded, deterministically ordered list of stored memories.
+    """
+    from brain.memory import load_memory
+    memories = load_memory()
+    items = []
+    for key in sorted(memories.keys()):
+        val = memories[key]
+        tag = "PREFERENCE" if key in ["name", "likes", "favorite_game", "laptop", "phone", "project"] else "SEMANTIC"
+        items.append({
+            "key": key,
+            "value": str(val),
+            "tag": tag,
+            "text": f"{key}: {val}"
+        })
+    return {"total": len(items), "memories": items[:limit]}
+
+
 from pydantic import BaseModel
 from fastapi import HTTPException
 

@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const agentPanel = new window.AgentPanel('agentFeed');
     const securityModal = new window.SecurityModal('securityModal');
     const dashboard = new window.SystemDashboard();
+    const memoryPanel = new window.MemoryPanel('memoryFeed');
 
     // UI State Badge Listener
     const stateBadge = document.getElementById('stateText');
@@ -101,6 +102,11 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'system_metrics':
                 if (payload && dashboard) {
                     dashboard.updateMetrics(payload);
+                }
+                break;
+            case 'memory_updated':
+                if (payload && memoryPanel) {
+                    memoryPanel.addOrUpdateMemory(payload.key, payload.value, payload.action || 'REMEMBERED');
                 }
                 break;
         }

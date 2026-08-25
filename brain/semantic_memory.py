@@ -96,8 +96,12 @@ class SemanticMemoryStore:
         with self._lock:
             try:
                 os.makedirs(os.path.dirname(self.store_path), exist_ok=True)
-                with open(self.store_path, "w", encoding="utf-8") as f:
+                temp_file = self.store_path + ".tmp"
+                with open(temp_file, "w", encoding="utf-8") as f:
                     json.dump(self._entries, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temp_file, self.store_path)
             except Exception as err:
                 logger.error(f"[SemanticMemoryStore] Save error: {err}")
 

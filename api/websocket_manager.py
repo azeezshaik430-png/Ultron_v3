@@ -6,7 +6,7 @@ Manages live WebSocket clients and streams AgentBus topics to connected UI clien
 import asyncio
 import json
 import time
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Any
 from fastapi import WebSocket
 
 from brain.agent_bus import AgentMemoryBus
@@ -150,12 +150,21 @@ class WebSocketManager:
             })
             self.broadcast_sync("voice_state", {"state": "WAITING_CONFIRMATION", "timestamp": time.time()})
 
+        def _on_memory_updated(key: str = "", value: Any = None, action: str = "remember", **kwargs):
+            self.broadcast_sync("memory_updated", {
+                "key": key,
+                "value": str(value) if value is not None else "",
+                "action": action,
+                "timestamp": time.time(),
+            })
+
         # Register event_bus subscribers
         try:
             event_bus.subscribe("VOICE_STATE_CHANGED", _on_voice_state_changed)
             event_bus.subscribe("SPEECH_RECOGNIZED", _on_speech_recognized)
             event_bus.subscribe("ASSISTANT_RESPONSE", _on_assistant_response)
             event_bus.subscribe("AGENT_PROGRESS", _on_agent_progress)
+            event_bus.subscribe("MEMORY_UPDATED", _on_memory_updated)
             event_bus.subscribe(event_bus.TASK_STARTED, lambda command="": _on_voice_state_changed("PROCESSING"))
             event_bus.subscribe(event_bus.TASK_FINISHED, lambda command="": _on_voice_state_changed("IDLE"))
         except Exception:

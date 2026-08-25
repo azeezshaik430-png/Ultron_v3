@@ -2,16 +2,17 @@
 ULTRON V3
 Advanced Memory System v2.0
 
-Safe JSON Handling
-Persistent Memory
+Safe JSON Handling & Atomic Persistence
+Thread-Safe Key-Value & Semantic Sync
 """
 
 import json
 import os
-
+import threading
+from core.logger import logger
 
 MEMORY_FILE = "data/memory.json"
-
+_memory_lock = threading.RLock()
 
 
 # ==================================
@@ -19,112 +20,83 @@ MEMORY_FILE = "data/memory.json"
 # ==================================
 
 def load_memory():
+    with _memory_lock:
+        try:
+            if not os.path.exists(MEMORY_FILE):
+                return {}
 
-    try:
+            with open(MEMORY_FILE, "r", encoding="utf-8") as file:
+                data = json.load(file)
+                return data if isinstance(data, dict) else {}
 
-        if not os.path.exists(MEMORY_FILE):
+        except json.JSONDecodeError as e:
+            logger.warning(f"[Memory] File '{MEMORY_FILE}' corrupted: {e}. Creating backup and resetting.")
+            try:
+                if os.path.exists(MEMORY_FILE):
+                    os.replace(MEMORY_FILE, MEMORY_FILE + ".corrupted")
+            except Exception:
+                pass
+            return {}
 
+        except Exception as e:
+            logger.error(f"[Memory] Memory Load Error: {e}")
             return {}
 
 
-        with open(
-            MEMORY_FILE,
-            "r",
-            encoding="utf-8"
-        ) as file:
-
-            return json.load(file)
-
-
-
-    except json.JSONDecodeError:
-
-        print("Memory file corrupted. Resetting...")
-
-        return {}
-
-
-
-    except Exception as e:
-
-        print(
-            "Memory Load Error:",
-            e
-        )
-
-        return {}
-
-
-
-
 # ==================================
-# SAVE MEMORY
+# SAVE MEMORY (Atomic File Write)
 # ==================================
 
 def save_memory(data):
+    with _memory_lock:
+        try:
+            os.makedirs("data", exist_ok=True)
+            temp_file = MEMORY_FILE + ".tmp"
+            with open(temp_file, "w", encoding="utf-8") as file:
+                json.dump(data, file, indent=4, ensure_ascii=False)
+                file.flush()
+                os.fsync(file.fileno())
 
-    try:
+            os.replace(temp_file, MEMORY_FILE)
+            return True
 
-        os.makedirs(
-            "data",
-            exist_ok=True
-        )
-
-
-        with open(
-            MEMORY_FILE,
-            "w",
-            encoding="utf-8"
-        ) as file:
-
-
-            json.dump(
-                data,
-                file,
-                indent=4,
-                ensure_ascii=False
-            )
-
-
-        return True
-
-
-
-    except Exception as e:
-
-        print(
-            "Memory Save Error:",
-            e
-        )
-
-        return False
-
-
+        except Exception as e:
+            logger.error(f"[Memory] Memory Save Error: {e}")
+            temp_file = MEMORY_FILE + ".tmp"
+            if os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except Exception:
+                    pass
+            return False
 
 
 # ==================================
-# REMEMBER
+# REMEMBER (Canonical Path + Vector Sync)
 # ==================================
 
 def remember(key, value):
+    with _memory_lock:
+        memory = load_memory()
+        memory[key] = value
+        save_memory(memory)
 
+        # Sync to SemanticMemoryStore for vector similarity retrieval
+        try:
+            from brain.semantic_memory import SemanticMemoryStore
+            store = SemanticMemoryStore()
+            store.store_memory(key, value)
+        except Exception as err:
+            logger.debug(f"[Memory] Semantic vector store auto-sync notice: {err}")
 
-    memory = load_memory()
+        # Emit MEMORY_UPDATED event over EventBus
+        try:
+            from core.event_bus import event_bus
+            event_bus.publish("MEMORY_UPDATED", key=key, value=value, action="remember")
+        except Exception:
+            pass
 
-
-    memory[key] = value
-
-
-    save_memory(memory)
-
-
-
-    return (
-        f"I will remember that "
-        f"{key} is {value}"
-    )
-
-
+        return f"I will remember that {key} is {value}"
 
 
 # ==================================
@@ -132,17 +104,9 @@ def remember(key, value):
 # ==================================
 
 def recall(key):
-
-
-    memory = load_memory()
-
-
-    return memory.get(
-        key,
-        None
-    )
-
-
+    with _memory_lock:
+        memory = load_memory()
+        return memory.get(key, None)
 
 
 # ==================================
@@ -150,8 +114,11 @@ def recall(key):
 # ==================================
 
 def clear_memory():
-
-    save_memory({})
-
-
-    return "All memories cleared Boss"
+    with _memory_lock:
+        save_memory({})
+        try:
+            from brain.semantic_memory import SemanticMemoryStore
+            SemanticMemoryStore().clear()
+        except Exception:
+            pass
+        return "All memories cleared Boss"

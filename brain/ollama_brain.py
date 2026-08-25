@@ -12,42 +12,66 @@ from brain.conversation_memory import save_chat, get_recent_chats
 MODEL = "llama3.2:3b"
 
 
+def build_system_prompt(prompt: str) -> str:
+    """Build structured system prompt with User Memory, Semantic Memory, and Conversation History."""
+    from core.session import session
+    from brain.semantic_memory import SemanticMemoryStore
+
+    lang_rule = (
+        "- Respond in natural Telugu (తెలుగు). Technical terms may remain in English where appropriate."
+        if getattr(session, "preferred_language", "en") == "te"
+        else "- Speak in clear natural English."
+    )
+
+    memory = load_memory()
+    memory_context = "User Memory:\n"
+    existing_keys = set(memory.keys())
+    for key, value in memory.items():
+        memory_context += f"{key}: {value}\n"
+
+    # Semantic Memory Vector Relevance Retrieval
+    semantic_context = ""
+    try:
+        store = SemanticMemoryStore()
+        sem_entries = store.query_semantic_memory(prompt, top_k=3, min_score=0.15)
+        filtered_sem = [
+            e for e in sem_entries
+            if e.get("key") not in existing_keys
+        ]
+        if filtered_sem:
+            semantic_context = "Relevant Semantic Context:\n"
+            for item in filtered_sem:
+                semantic_context += f"- {item['key']}: {item['value']}\n"
+    except Exception:
+        pass
+
+    chat_context = "Recent Conversation:\n"
+    chats = get_recent_chats()
+    for chat in chats:
+        chat_context += f"User: {chat['user']}\nULTRON: {chat['assistant']}\n"
+
+    parts = [
+        f"You are ULTRON V3, a personal AI assistant.\nRules:\n{lang_rule}\n- Speak naturally, directly, and neutrally. Do NOT start responses with 'Boss' or 'Boss!'.\n- Provide concise, conversational answers of 2 to 3 sentences suitable for speech.\n- Do NOT use markdown tables or long bulleted lists unless requested.\n- Use memory when useful.",
+        memory_context.strip(),
+    ]
+    if semantic_context:
+        parts.append(semantic_context.strip())
+    parts.append(chat_context.strip())
+
+    return "\n\n".join(parts)
+
+
 def ask_ollama(prompt: str) -> str:
     """Generate response using Ollama local AI model with low latency and language responsiveness."""
     try:
-        from core.session import session
-        lang_rule = (
-            "- Respond in natural Telugu (తెలుగు). Technical terms may remain in English where appropriate."
-            if getattr(session, "preferred_language", "en") == "te"
-            else "- Speak in clear natural English."
-        )
-
-        memory = load_memory()
-        memory_context = "User Memory:\n"
-        for key, value in memory.items():
-            memory_context += f"{key}: {value}\n"
-
-        chat_context = "Recent Conversation:\n"
-        chats = get_recent_chats()
-        for chat in chats:
-            chat_context += f"User: {chat['user']}\nULTRON: {chat['assistant']}\n"
+        system_content = build_system_prompt(prompt)
 
         response = ollama.chat(
             model=MODEL,
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        f"You are ULTRON V3, a personal AI assistant.\n"
-                        f"Rules:\n"
-                        f"{lang_rule}\n"
-                        f"- Speak naturally, directly, and neutrally. Do NOT start responses with 'Boss' or 'Boss!'.\n"
-                        f"- Provide concise, conversational answers of 2 to 3 sentences suitable for speech.\n"
-                        f"- Do NOT use markdown tables or long bulleted lists unless requested.\n"
-                        f"- Use memory when useful.\n\n"
-                        f"{memory_context}\n\n"
-                        f"{chat_context}"
-                    )
+                    "content": system_content
                 },
                 {
                     "role": "user",
@@ -73,39 +97,14 @@ def ask_ollama(prompt: str) -> str:
 def ask_ollama_stream(prompt: str):
     """Stream response tokens incrementally from Ollama local AI model with low latency."""
     try:
-        from core.session import session
-        lang_rule = (
-            "- Respond in natural Telugu (తెలుగు). Technical terms may remain in English where appropriate."
-            if getattr(session, "preferred_language", "en") == "te"
-            else "- Speak in clear natural English."
-        )
-
-        memory = load_memory()
-        memory_context = "User Memory:\n"
-        for key, value in memory.items():
-            memory_context += f"{key}: {value}\n"
-
-        chat_context = "Recent Conversation:\n"
-        chats = get_recent_chats()
-        for chat in chats:
-            chat_context += f"User: {chat['user']}\nULTRON: {chat['assistant']}\n"
+        system_content = build_system_prompt(prompt)
 
         response = ollama.chat(
             model=MODEL,
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        f"You are ULTRON V3, a personal AI assistant.\n"
-                        f"Rules:\n"
-                        f"{lang_rule}\n"
-                        f"- Speak naturally, directly, and neutrally. Do NOT start responses with 'Boss' or 'Boss!'.\n"
-                        f"- Provide concise, conversational answers of 2 to 3 sentences suitable for speech.\n"
-                        f"- Do NOT use markdown tables or long bulleted lists unless requested.\n"
-                        f"- Use memory when useful.\n\n"
-                        f"{memory_context}\n\n"
-                        f"{chat_context}"
-                    )
+                    "content": system_content
                 },
                 {"role": "user", "content": prompt}
             ],
