@@ -3,149 +3,260 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ULTRON V3 — Futuristic AI Assistant HUD</title>
+    <title>ULTRON V3 — Command Interface</title>
     <link rel="stylesheet" href="/static/css/main.css">
     <link rel="stylesheet" href="/static/css/components.css">
-    <!-- Include Three.js for 3D WebGL Avatar -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
-<body class="ultron-hud-theme">
+<body class="ultron-cinematic">
 
-    <!-- TOP HEADER / STATUS BAR -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- HEADER                                                 -->
+    <!-- ═══════════════════════════════════════════════════════ -->
     <header class="hud-header">
         <div class="hud-brand">
-            <span class="brand-logo">▲</span>
+            <div class="brand-logo">U</div>
             <span class="brand-title">ULTRON <small>V3.0</small></span>
         </div>
-        <div class="hud-status-badge" id="hudStateBadge">
+        <div class="hud-status-badge" id="hudStatusBadge">
             <span class="status-dot"></span>
-            <span class="status-text" id="stateText">IDLE</span>
+            <span id="stateText">IDLE</span>
         </div>
         <div class="hud-actions">
             <button class="icon-btn" id="btnToggleSettings" title="Settings">⚙</button>
         </div>
     </header>
 
-    <!-- MAIN RESPONSIVE HUD GRID -->
-    <main class="hud-grid-container">
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- MAIN CINEMATIC GRID                                    -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <main class="hud-cinematic">
 
-        <!-- LEFT COLUMN: CONVERSATION & AGENTS -->
+        <!-- ─── LEFT HUD COLUMN ─── -->
         <section class="hud-col col-left">
-            <!-- CONVERSATION PANEL -->
-            <div class="glass-card panel-conversation">
-                <div class="card-header">
-                    <h3>💬 Conversation Stream</h3>
+
+            <!-- SYSTEM VITALS -->
+            <div class="glass-panel panel-system-vitals">
+                <div class="panel-header">
+                    <h3>◆ SYSTEM VITALS</h3>
+                </div>
+                <div class="panel-body" id="systemVitals">
+                    <div class="metric-row">
+                        <span class="metric-label">CPU</span>
+                        <span class="metric-val gold" id="cpuVal">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">RAM</span>
+                        <span class="metric-val gold" id="ramVal">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">GPU</span>
+                        <span class="metric-val" id="gpuVal">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">NETWORK</span>
+                        <span class="metric-val success" id="netVal">ONLINE</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">CORE TEMP</span>
+                        <span class="metric-val" id="tempVal">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">POWER</span>
+                        <span class="metric-val" id="powerVal">{{ platform }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACTIVE AGENT -->
+            <div class="glass-panel panel-agents">
+                <div class="panel-header">
+                    <h3>◆ ACTIVE AGENT</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="agent-feed" id="agentFeed">
+                        <div class="agent-item">
+                            <span class="agent-name">ULTRON Core</span>
+                            <span class="agent-step">Standing by for commands</span>
+                            <div class="progress-track"><div class="progress-fill" style="width: 100%;"></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONVERSATION -->
+            <div class="glass-panel panel-conversation">
+                <div class="panel-header">
+                    <h3>◆ CONVERSATION</h3>
                     <span class="badge" id="langBadge">EN / TE</span>
                 </div>
-                <div class="card-body conversation-feed" id="conversationFeed">
-                    <div class="chat-message assistant-msg">
-                        <span class="msg-sender">ULTRON</span>
-                        <p>Systems initialized, Boss. All engines active.</p>
-                        <span class="msg-time">Just now</span>
+                <div class="panel-body">
+                    <div class="conversation-feed" id="conversationFeed">
+                        <div class="chat-msg assistant">
+                            <span class="msg-sender">ULTRON</span>
+                            <p class="msg-text">Systems online, Boss. All engines active. Awaiting your command.</p>
+                            <span class="msg-time">Now</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- MULTI-AGENT & TASK MONITOR -->
-            <div class="glass-card panel-agents">
-                <div class="card-header">
-                    <h3>🤖 Multi-Agent Execution</h3>
-                </div>
-                <div class="card-body agent-feed" id="agentFeed">
-                    <div class="agent-item active">
-                        <span class="agent-name">BrowserAgent</span>
-                        <span class="agent-step">Ready for web automation</span>
-                        <div class="progress-bar"><div class="fill" style="width: 100%;"></div></div>
-                    </div>
-                </div>
-            </div>
         </section>
 
-        <!-- CENTER COLUMN: 3D HOLOGRAM AVATAR & VOICE WAVEFORM -->
+        <!-- ─── CENTER COLUMN ─── -->
         <section class="hud-col col-center">
-            <div class="glass-card panel-avatar">
-                <!-- 3D WEBGL CANVAS -->
-                <div class="canvas-container" id="avatarCanvasContainer">
+
+            <!-- CENTRAL AI AVATAR -->
+            <div class="panel-avatar">
+                <div class="avatar-canvas-wrap" id="avatarContainer">
                     <canvas id="avatarCanvas"></canvas>
-                </div>
-                <!-- AUDIO SPECTRUM VISUALIZER CANVAS -->
-                <div class="spectrum-container">
-                    <canvas id="spectrumCanvas" width="400" height="60"></canvas>
+                    <div class="avatar-corner tl"></div>
+                    <div class="avatar-corner tr"></div>
+                    <div class="avatar-corner bl"></div>
+                    <div class="avatar-corner br"></div>
+                    <div class="avatar-state-label" id="avatarStateLabel">STANDBY</div>
                 </div>
             </div>
+
+            <!-- VOICE WAVEFORM -->
+            <div class="voice-waveform-wrap">
+                <canvas id="waveformCanvas" width="600" height="40"></canvas>
+            </div>
+
+            <!-- VOICE CONTROLS -->
+            <div class="voice-controls">
+                <button class="mic-btn" id="micBtn" title="Toggle microphone">🎤</button>
+                <span class="voice-state-text" id="voiceStateText">IDLE</span>
+            </div>
+
+            <!-- COMMAND INPUT -->
+            <div class="command-input-wrap">
+                <input type="text"
+                       class="command-input"
+                       id="commandInput"
+                       placeholder="Type a command..."
+                       autocomplete="off"
+                       spellcheck="false">
+                <button class="command-send-btn" id="commandSendBtn" title="Send">▶</button>
+            </div>
+
+            <!-- QUICK ACCESS -->
+            <div class="quick-access" id="quickAccess">
+                <button class="quick-btn" data-cmd="system status">System Status</button>
+                <button class="quick-btn" data-cmd="volume up">Volume +</button>
+                <button class="quick-btn" data-cmd="volume down">Volume −</button>
+                <button class="quick-btn" data-cmd="lock pc">Lock PC</button>
+                <button class="quick-btn" data-cmd="open youtube">YouTube</button>
+                <button class="quick-btn" data-cmd="open chrome">Chrome</button>
+                <button class="quick-btn" data-cmd="take a screenshot">Screenshot</button>
+                <button class="quick-btn" data-cmd="get time">Time</button>
+            </div>
+
+            <!-- BOTTOM HUD STRIP -->
+            <div class="hud-bottom">
+                <div class="bottom-strip">
+                    <div class="strip-left">
+                        <div class="strip-item">
+                            <span class="strip-dot green"></span>
+                            <span>GATEWAY</span>
+                        </div>
+                        <div class="strip-item">
+                            <span class="strip-dot green"></span>
+                            <span>AGENTBUS</span>
+                        </div>
+                        <div class="strip-item">
+                            <span class="strip-dot" id="wsDot"></span>
+                            <span id="wsLabel">WS: CONNECTING</span>
+                        </div>
+                    </div>
+                    <div class="strip-right">
+                        <span id="uptimeLabel">UPTIME: 0:00</span>
+                        <span id="cmdCountLabel">CMD: 0</span>
+                    </div>
+                </div>
+            </div>
+
         </section>
 
-        <!-- RIGHT COLUMN: SYSTEM DIAGNOSTICS & MEMORY -->
+        <!-- ─── RIGHT HUD COLUMN ─── -->
         <section class="hud-col col-right">
-            <!-- SYSTEM DIAGNOSTICS -->
-            <div class="glass-card panel-system">
-                <div class="card-header">
-                    <h3>⚡ System Diagnostics</h3>
+
+            <!-- DEVICE STATUS -->
+            <div class="glass-panel panel-device">
+                <div class="panel-header">
+                    <h3>◆ DEVICE</h3>
                 </div>
-                <div class="card-body metrics-grid">
-                    <div class="metric-box">
-                        <span class="metric-label">CPU</span>
-                        <span class="metric-val" id="cpuVal">0%</span>
+                <div class="panel-body">
+                    <div class="status-row">
+                        <span class="metric-label">Platform</span>
+                        <span class="status-pill gold" id="platformVal">{{ platform }}</span>
                     </div>
-                    <div class="metric-box">
-                        <span class="metric-label">RAM</span>
-                        <span class="metric-val" id="ramVal">0%</span>
+                    <div class="status-row">
+                        <span class="metric-label">Voice Auth</span>
+                        <span class="status-pill green" id="voiceAuthVal">ACTIVE</span>
                     </div>
-                    <div class="metric-box">
-                        <span class="metric-label">OS</span>
-                        <span class="metric-val" id="osVal">{{ platform }}</span>
+                    <div class="status-row">
+                        <span class="metric-label">LLM</span>
+                        <span class="status-pill gold">OLLAMA</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="metric-label">Vision</span>
+                        <span class="status-pill green" id="visionVal">READY</span>
                     </div>
                 </div>
             </div>
 
-            <!-- MEMORY RECALL VIEWER -->
-            <div class="glass-card panel-memory">
-                <div class="card-header">
-                    <h3>🧠 Memory Recall</h3>
+            <!-- MEMORY RECALL -->
+            <div class="glass-panel panel-memory">
+                <div class="panel-header">
+                    <h3>◆ MEMORY</h3>
                 </div>
-                <div class="card-body memory-feed" id="memoryFeed">
-                    <div class="memory-item">
-                        <span class="mem-tag">PREFERENCE</span>
-                        <p class="mem-text">User prefers concise technical responses.</p>
+                <div class="panel-body">
+                    <div class="memory-feed" id="memoryFeed">
+                        <div class="memory-item">
+                            <span class="mem-tag">PREF</span>
+                            <p class="mem-text">Loading memories...</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- VISION & DEVICE STATUS -->
-            <div class="glass-card panel-status">
-                <div class="card-header">
-                    <h3>👁 Vision & Devices</h3>
+            <!-- SECURITY / ACTIVITY LOG -->
+            <div class="glass-panel panel-activity">
+                <div class="panel-header">
+                    <h3>◆ ACTIVITY LOG</h3>
                 </div>
-                <div class="card-body status-list">
-                    <div class="status-row">
-                        <span>OCR Vision</span>
-                        <span class="status-pill green">ACTIVE</span>
-                    </div>
-                    <div class="status-row">
-                        <span>Device Node</span>
-                        <span class="status-pill cyan">{{ platform }} PC</span>
+                <div class="panel-body">
+                    <div class="activity-feed" id="activityFeed">
+                        <div class="activity-entry success">
+                            <span class="act-time">NOW</span>
+                            <span class="act-text">System initialized</span>
+                        </div>
                     </div>
                 </div>
             </div>
+
         </section>
 
     </main>
 
-    <!-- SECURITY CONFIRMATION OVERLAY MODAL -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECURITY CONFIRMATION MODAL                            -->
+    <!-- ═══════════════════════════════════════════════════════ -->
     <div class="modal-overlay hidden" id="securityModal">
-        <div class="glass-card modal-card">
-            <div class="modal-header warning">
-                <span class="modal-icon">⚠️</span>
+        <div class="glass-panel modal-card">
+            <div class="modal-header">
+                <span>⚠️</span>
                 <h2>SECURITY AUTHORIZATION REQUIRED</h2>
             </div>
             <div class="modal-body">
-                <p>Dangerous system action requested:</p>
+                <p style="color: var(--text-secondary); font-size: 0.85rem;">Dangerous system action requested:</p>
                 <div class="action-detail-box">
-                    <span class="action-label" id="secActionLabel">ACTION: Shutdown PC</span>
-                    <span class="target-label" id="secTargetLabel">TARGET: Local Host</span>
+                    <span class="action-label" id="secActionLabel">ACTION: --</span>
+                    <span class="target-label" id="secTargetLabel">TARGET: --</span>
                 </div>
                 <div class="timer-ring">
-                    <span id="secTimerVal">15</span>s
+                    <span id="secTimerVal">15</span><span style="font-size: 0.8rem; color: var(--text-muted);">s</span>
                 </div>
             </div>
             <div class="modal-actions">
@@ -155,38 +266,41 @@
         </div>
     </div>
 
-    <!-- SETTINGS CONTROL DRAWER -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SETTINGS DRAWER                                        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
     <div class="drawer-overlay hidden" id="settingsDrawer">
-        <div class="glass-card drawer-card">
-            <div class="drawer-header">
-                <h2>System Settings</h2>
-                <button class="icon-btn" id="btnCloseSettings">✕</button>
-            </div>
-            <div class="drawer-body">
-                <div class="setting-group">
-                    <label>Voice Engine</label>
-                    <select id="selectVoiceEngine">
-                        <option value="sapi5">Windows SAPI5 (Fast English)</option>
-                        <option value="piper">Piper ONNX (Telugu / Offline)</option>
-                    </select>
-                </div>
-                <div class="setting-group">
-                    <label>Wake Word Sensitivity</label>
-                    <input type="range" min="0.1" max="1.0" step="0.05" value="0.68">
-                </div>
-            </div>
+        <div class="drawer-header">
+            <h2>SYSTEM SETTINGS</h2>
+            <button class="icon-btn" id="btnCloseSettings">✕</button>
+        </div>
+        <div class="setting-group">
+            <label>VOICE ENGINE</label>
+            <select id="selectVoiceEngine">
+                <option value="sapi5">Windows SAPI5 (Fast English)</option>
+                <option value="piper">Piper ONNX (Telugu / Offline)</option>
+            </select>
+        </div>
+        <div class="setting-group">
+            <label>WAKE WORD SENSITIVITY</label>
+            <input type="range" min="0.1" max="1.0" step="0.05" value="0.68">
         </div>
     </div>
 
-    <!-- FRONTEND JAVASCRIPT CONTROLLERS -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- JAVASCRIPT                                             -->
+    <!-- ═══════════════════════════════════════════════════════ -->
     <script src="/static/js/state_machine.js"></script>
-    <script src="/static/js/components/AvatarRenderer.js"></script>
-    <script src="/static/js/components/VoiceVisualizer.js"></script>
+    <script src="/static/js/components/ULTRONAvatar.js"></script>
+    <script src="/static/js/components/VoiceInterface.js"></script>
     <script src="/static/js/components/ConversationPanel.js"></script>
     <script src="/static/js/components/AgentPanel.js"></script>
     <script src="/static/js/components/SecurityModal.js"></script>
     <script src="/static/js/components/SystemDashboard.js"></script>
     <script src="/static/js/components/MemoryPanel.js"></script>
+    <script src="/static/js/components/CommandInput.js"></script>
+    <script src="/static/js/components/QuickAccess.js"></script>
+    <script src="/static/js/components/ActivityLog.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

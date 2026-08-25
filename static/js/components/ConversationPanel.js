@@ -1,5 +1,5 @@
 /**
- * ULTRON V3 - Conversation Panel Component
+ * ULTRON V3 — Conversation Panel Component
  * Displays user voice transcriptions and ULTRON assistant responses.
  */
 
@@ -10,14 +10,16 @@ class ConversationPanel {
 
     addMessage(sender, text, type = 'assistant') {
         if (!this.feed) return;
+
         const msgDiv = document.createElement('div');
-        msgDiv.className = `chat-message ${type === 'user' ? 'user-msg' : 'assistant-msg'}`;
+        msgDiv.className = `chat-msg ${type === 'user' ? 'user' : 'assistant'}`;
 
         const senderSpan = document.createElement('span');
         senderSpan.className = 'msg-sender';
         senderSpan.textContent = sender;
 
         const textP = document.createElement('p');
+        textP.className = 'msg-text';
         textP.textContent = text;
 
         const timeSpan = document.createElement('span');

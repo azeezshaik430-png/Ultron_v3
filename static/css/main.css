@@ -1,143 +1,520 @@
-/* ULTRON V3 - Futuristic Glassmorphic Design System Tokens & Base Layout */
+/* ============================================================
+   ULTRON V3 — Premium Cinematic Command Interface
+   Theme: Metallic Gold + Black + Gunmetal + Amber
+   ============================================================ */
 
+/* ─── Design Tokens ─── */
 :root {
-    --bg-dark: #07080c;
-    --card-bg: rgba(13, 16, 25, 0.65);
-    --card-border: rgba(0, 240, 255, 0.18);
-    --text-primary: #e6f1ff;
-    --text-secondary: #8892b0;
-    --accent-cyan: #00f0ff;
-    --accent-gold: #ffb703;
-    --accent-crimson: #ff0055;
-    --accent-green: #00ff88;
-    --accent-violet: #7000ff;
-    --font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    --radius-lg: 16px;
-    --radius-sm: 8px;
-    --shadow-glow: 0 0 20px rgba(0, 240, 255, 0.2);
+    /* Core Palette */
+    --bg-void:         #040506;
+    --bg-deep:         #08090b;
+    --bg-panel:        #0c0d10;
+    --bg-card:         rgba(12, 13, 16, 0.78);
+    --bg-card-hover:   rgba(18, 19, 24, 0.85);
+    --bg-elevated:     rgba(22, 20, 15, 0.65);
+
+    /* Metallic Spectrum */
+    --gold:            #d4a843;
+    --gold-bright:     #f5c842;
+    --gold-dim:        #8b7230;
+    --gold-glow:       rgba(212, 168, 67, 0.35);
+    --amber:           #e8a020;
+    --amber-dim:       #6b5018;
+    --amber-glow:      rgba(232, 160, 32, 0.25);
+
+    /* Gunmetal & Steel */
+    --gunmetal:        #2a2d32;
+    --gunmetal-light:  #3a3d44;
+    --steel:           #5a5e66;
+    --steel-light:     #8a8e96;
+    --chrome:          #c0c4cc;
+
+    /* Semantic */
+    --danger:          #cc3333;
+    --danger-glow:     rgba(204, 51, 51, 0.25);
+    --success:         #33aa55;
+    --success-glow:    rgba(51, 170, 85, 0.2);
+    --info:            #d4a843;
+    --warning:         #cc8800;
+
+    /* Text */
+    --text-primary:    #e8e4dc;
+    --text-secondary:  #908a7e;
+    --text-muted:      #5e5a52;
+    --text-gold:       #d4a843;
+
+    /* Typography */
+    --font-main:       'Segoe UI', -apple-system, system-ui, sans-serif;
+    --font-mono:       'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    --font-display:    'Segoe UI', system-ui, sans-serif;
+
+    /* Sizing */
+    --radius-lg:       12px;
+    --radius-md:       8px;
+    --radius-sm:       5px;
+    --radius-pill:     50px;
+
+    /* Effects */
+    --glow-gold:       0 0 20px rgba(212, 168, 67, 0.25);
+    --glow-amber:      0 0 15px rgba(232, 160, 32, 0.2);
+    --glow-line:       0 0 8px rgba(212, 168, 67, 0.15);
+    --glow-danger:     0 0 20px rgba(204, 51, 51, 0.3);
+    --shadow-card:     0 4px 24px rgba(0, 0, 0, 0.6);
+    --border-subtle:   1px solid rgba(212, 168, 67, 0.12);
+    --border-active:   1px solid rgba(212, 168, 67, 0.35);
+    --border-dim:      1px solid rgba(255, 255, 255, 0.06);
+
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-med:  0.3s ease;
+    --transition-slow: 0.5s ease;
 }
 
-* {
+/* ─── Reset & Base ─── */
+*, *::before, *::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
 }
 
-body.ultron-hud-theme {
-    background: var(--bg-dark);
-    background-image: 
-        radial-gradient(circle at 50% 30%, rgba(0, 240, 255, 0.08) 0%, transparent 60%),
-        radial-gradient(circle at 80% 80%, rgba(112, 0, 255, 0.06) 0%, transparent 50%);
+html {
+    font-size: 14px;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body.ultron-cinematic {
+    background: var(--bg-void);
+    background-image:
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(212, 168, 67, 0.04) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(232, 160, 32, 0.03) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 30% at 10% 80%, rgba(42, 45, 50, 0.3) 0%, transparent 50%);
     color: var(--text-primary);
-    font-family: var(--font-family);
+    font-family: var(--font-main);
     min-height: 100vh;
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
 }
 
-/* TOP HEADER */
+/* ─── Selection ─── */
+::selection {
+    background: rgba(212, 168, 67, 0.3);
+    color: #fff;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar {
+    width: 5px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg-deep);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--gunmetal-light);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--gold-dim);
+}
+
+/* ─── HUD Header ─── */
 .hud-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 24px;
-    background: rgba(7, 8, 12, 0.85);
-    border-bottom: 1px solid var(--card-border);
-    backdrop-filter: blur(12px);
+    padding: 10px 24px;
+    background: linear-gradient(180deg, rgba(12, 13, 16, 0.95) 0%, rgba(8, 9, 11, 0.9) 100%);
+    border-bottom: 1px solid rgba(212, 168, 67, 0.12);
+    backdrop-filter: blur(20px);
     z-index: 100;
+    min-height: 48px;
 }
 
 .hud-brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+}
+
+.brand-logo {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dim) 100%);
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--bg-void);
+    letter-spacing: -1px;
+}
+
+.brand-title {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
     font-weight: 700;
-    font-size: 1.2rem;
-    color: var(--accent-cyan);
-    letter-spacing: 2px;
+    color: var(--gold);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+}
+
+.brand-title small {
+    font-size: 0.65rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+    letter-spacing: 1px;
+    margin-left: 4px;
 }
 
 .hud-status-badge {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 16px;
-    border-radius: 20px;
-    background: rgba(0, 240, 255, 0.1);
-    border: 1px solid var(--accent-cyan);
-    font-size: 0.85rem;
+    padding: 5px 14px;
+    border-radius: var(--radius-pill);
+    background: rgba(212, 168, 67, 0.06);
+    border: 1px solid rgba(212, 168, 67, 0.2);
+    font-size: 0.78rem;
     font-weight: 600;
-}
-
-.status-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--accent-cyan);
-    box-shadow: 0 0 10px var(--accent-cyan);
-    animation: pulseDot 2s infinite;
-}
-
-@keyframes pulseDot {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(0.85); }
-}
-
-/* RESPONSIVE HUD GRID */
-.hud-grid-container {
-    display: grid;
-    grid-template-columns: 320px 1fr 340px;
-    gap: 16px;
-    padding: 16px;
-    flex: 1;
-    height: calc(100vh - 60px);
-}
-
-.hud-col {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    height: 100%;
-}
-
-/* GLASS CARD BASE */
-.glass-card {
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: var(--radius-lg);
-    backdrop-filter: blur(16px);
-    box-shadow: var(--shadow-glow);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 18px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.card-header h3 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-primary);
+    color: var(--gold);
     letter-spacing: 1px;
 }
 
-.card-body {
-    padding: 16px;
-    flex: 1;
-    overflow-y: auto;
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 10px var(--gold-glow);
+    animation: pulseDot 2.5s ease-in-out infinite;
 }
 
-/* MEDIA QUERIES FOR RESPONSIVE DESKTOP & MOBILE */
-@media (max-width: 1024px) {
-    .hud-grid-container {
+@keyframes pulseDot {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--gold-glow); }
+    50% { opacity: 0.4; box-shadow: 0 0 3px var(--gold-glow); }
+}
+
+.hud-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.icon-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid rgba(212, 168, 67, 0.15);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.icon-btn:hover {
+    background: rgba(212, 168, 67, 0.1);
+    color: var(--gold);
+    border-color: rgba(212, 168, 67, 0.3);
+}
+
+/* ─── Main Cinematic Grid ─── */
+.hud-cinematic {
+    display: grid;
+    grid-template-columns: 260px 1fr 260px;
+    grid-template-rows: 1fr auto;
+    gap: 0;
+    flex: 1;
+    height: calc(100vh - 48px);
+    overflow: hidden;
+}
+
+/* ─── Side Columns ─── */
+.hud-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px;
+    background: rgba(8, 9, 11, 0.5);
+    border-right: 1px solid rgba(212, 168, 67, 0.06);
+}
+
+.hud-col.col-right {
+    border-right: none;
+    border-left: 1px solid rgba(212, 168, 67, 0.06);
+}
+
+/* ─── Center Column ─── */
+.hud-col.col-center {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+/* ─── Glass Panel (Base) ─── */
+.glass-panel {
+    background: var(--bg-card);
+    border: var(--border-subtle);
+    border-radius: var(--radius-lg);
+    backdrop-filter: blur(12px);
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: border-color var(--transition-med);
+}
+
+.glass-panel:hover {
+    border-color: rgba(212, 168, 67, 0.2);
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(212, 168, 67, 0.08);
+    min-height: 36px;
+}
+
+.panel-header h3 {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--gold);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.panel-body {
+    padding: 10px 12px;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.badge {
+    font-size: 0.62rem;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: rgba(212, 168, 67, 0.1);
+    color: var(--gold-dim);
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+/* ─── Bottom Strip ─── */
+.hud-bottom {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0;
+    background: linear-gradient(0deg, rgba(8, 9, 11, 0.95) 0%, rgba(12, 13, 16, 0.9) 100%);
+    border-top: 1px solid rgba(212, 168, 67, 0.1);
+    min-height: 48px;
+    max-height: 48px;
+}
+
+/* ─── Metric Values ─── */
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.metric-row:last-child {
+    border-bottom: none;
+}
+
+.metric-label {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+}
+
+.metric-val {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+.metric-val.gold {
+    color: var(--gold);
+}
+
+.metric-val.danger {
+    color: var(--danger);
+}
+
+.metric-val.success {
+    color: var(--success);
+}
+
+/* ─── Progress Bar ─── */
+.progress-track {
+    width: 100%;
+    height: 3px;
+    background: var(--gunmetal);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--gold-dim) 0%, var(--gold) 100%);
+    transition: width var(--transition-med);
+    box-shadow: 0 0 6px var(--gold-glow);
+}
+
+/* ─── Status Indicators ─── */
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+}
+
+.status-pill {
+    font-size: 0.62rem;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.status-pill.gold {
+    background: rgba(212, 168, 67, 0.12);
+    color: var(--gold);
+}
+
+.status-pill.green {
+    background: rgba(51, 170, 85, 0.12);
+    color: var(--success);
+}
+
+.status-pill.red {
+    background: rgba(204, 51, 51, 0.12);
+    color: var(--danger);
+}
+
+.status-pill.muted {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+}
+
+/* ─── HUD Section Labels ─── */
+.hud-section-label {
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 8px 0 4px 0;
+}
+
+/* ─── Keyframe Animations ─── */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 8px var(--gold-glow); }
+    50% { box-shadow: 0 0 20px var(--gold-glow); }
+}
+
+@keyframes borderGlow {
+    0%, 100% { border-color: rgba(212, 168, 67, 0.15); }
+    50% { border-color: rgba(212, 168, 67, 0.35); }
+}
+
+@keyframes scanLine {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+}
+
+/* ─── Hidden Utility ─── */
+.hidden { display: none !important; }
+
+/* ─── Media Queries ─── */
+@media (max-width: 1200px) {
+    .hud-cinematic {
+        grid-template-columns: 220px 1fr 220px;
+    }
+}
+
+@media (max-width: 900px) {
+    .hud-cinematic {
         grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto auto;
         height: auto;
+        min-height: calc(100vh - 48px);
+    }
+    .hud-col.col-left,
+    .hud-col.col-right {
+        border: none;
+        padding: 4px 8px;
+        overflow-y: visible;
+    }
+    .hud-col.col-left {
+        order: 2;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 4px;
+        max-height: 180px;
+        overflow-y: auto;
+    }
+    .hud-col.col-left .glass-panel {
+        flex: 1;
+        min-width: 200px;
+    }
+    .hud-col.col-center {
+        order: 1;
+        min-height: 400px;
+    }
+    .hud-col.col-right {
+        order: 3;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 4px;
+        max-height: 180px;
+        overflow-y: auto;
+    }
+    .hud-col.col-right .glass-panel {
+        flex: 1;
+        min-width: 200px;
+    }
+    .hud-bottom {
+        order: 4;
+    }
+}
+
+@media (max-width: 600px) {
+    html { font-size: 13px; }
+    .hud-header { padding: 8px 12px; }
+    .brand-title { font-size: 0.9rem; letter-spacing: 2px; }
+    .hud-col.col-left,
+    .hud-col.col-right {
+        max-height: 140px;
     }
 }

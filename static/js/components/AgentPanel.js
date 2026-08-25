@@ -1,5 +1,5 @@
 /**
- * ULTRON V3 - Multi-Agent & Task Execution Monitor
+ * ULTRON V3 — Multi-Agent & Task Execution Monitor
  */
 
 class AgentPanel {
@@ -13,15 +13,15 @@ class AgentPanel {
         if (!item) {
             item = document.createElement('div');
             item.id = `agent-${agentName}`;
-            item.className = 'agent-item active';
-            this.feed.appendChild(item);
+            item.className = 'agent-item';
+            this.feed.prepend(item);
         }
 
         const pct = Math.round(progress * 100);
         item.innerHTML = `
             <span class="agent-name">${agentName}</span>
             <span class="agent-step">${step}</span>
-            <div class="progress-bar"><div class="fill" style="width: ${pct}%;"></div></div>
+            <div class="progress-track"><div class="progress-fill" style="width: ${pct}%;"></div></div>
         `;
     }
 }

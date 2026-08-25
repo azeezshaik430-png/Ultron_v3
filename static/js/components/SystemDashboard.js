@@ -1,12 +1,16 @@
 /**
- * ULTRON V3 - System Diagnostics Dashboard Component
+ * ULTRON V3 — System Diagnostics Dashboard Component
+ * Displays CPU, RAM, GPU, network, temperature, and power metrics.
  */
 
 class SystemDashboard {
     constructor() {
         this.cpuVal = document.getElementById('cpuVal');
         this.ramVal = document.getElementById('ramVal');
-        this.osVal = document.getElementById('osVal');
+        this.gpuVal = document.getElementById('gpuVal');
+        this.netVal = document.getElementById('netVal');
+        this.tempVal = document.getElementById('tempVal');
+        this.powerVal = document.getElementById('powerVal');
     }
 
     updateMetrics(metrics) {
@@ -17,8 +21,8 @@ class SystemDashboard {
         if (this.ramVal && metrics.ram_percent !== undefined) {
             this.ramVal.textContent = `${Math.round(metrics.ram_percent)}%`;
         }
-        if (this.osVal && metrics.platform) {
-            this.osVal.textContent = metrics.platform;
+        if (this.powerVal && metrics.platform) {
+            this.powerVal.textContent = metrics.platform;
         }
     }
 }

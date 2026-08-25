@@ -1,18 +1,19 @@
 /**
- * ULTRON V3 - UI State Machine Client Controller
- * Manages deterministic UI state transitions across all components.
+ * ULTRON V3 — UI State Machine
+ * Manages deterministic state transitions for the cinematic interface.
  */
 
 const UIState = Object.freeze({
-    IDLE: 'IDLE',
-    LISTENING: 'LISTENING',
-    PROCESSING: 'PROCESSING',
-    SPEAKING: 'SPEAKING',
-    EXECUTING: 'EXECUTING',
+    IDLE:               'IDLE',
+    LISTENING:          'LISTENING',
+    THINKING:           'THINKING',
+    PROCESSING:         'PROCESSING',
+    SPEAKING:           'SPEAKING',
+    EXECUTING:          'EXECUTING',
     WAITING_CONFIRMATION: 'WAITING_CONFIRMATION',
-    SUCCESS: 'SUCCESS',
-    ERROR: 'ERROR',
-    OFFLINE: 'OFFLINE'
+    SUCCESS:            'SUCCESS',
+    ERROR:              'ERROR',
+    OFFLINE:            'OFFLINE'
 });
 
 class UIStateMachine {
@@ -27,25 +28,18 @@ class UIStateMachine {
 
     setState(newState) {
         if (this.currentState === newState) return;
-        console.log(`[UI State Machine] Transition: ${this.currentState} -> ${newState}`);
-        const oldState = this.currentState;
+        console.log(`[UIStateMachine] ${this.currentState} → ${newState}`);
+        const old = this.currentState;
         this.currentState = newState;
-        this.notify(newState, oldState);
-    }
-
-    subscribe(listener) {
-        this.listeners.push(listener);
-    }
-
-    notify(newState, oldState) {
-        for (const listener of this.listeners) {
-            try {
-                listener(newState, oldState);
-            } catch (e) {
-                console.error('[UI State Machine] Listener error:', e);
-            }
+        for (const fn of this.listeners) {
+            try { fn(newState, old); } catch (e) { console.error('[UIStateMachine] Listener error:', e); }
         }
+    }
+
+    subscribe(fn) {
+        this.listeners.push(fn);
     }
 }
 
+window.UIState = UIState;
 window.uiStateMachine = new UIStateMachine();

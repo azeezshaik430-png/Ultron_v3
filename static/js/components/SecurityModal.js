@@ -1,5 +1,5 @@
 /**
- * ULTRON V3 - Security Confirmation Overlay Modal
+ * ULTRON V3 — Security Confirmation Overlay Modal
  * Handles high-priority confirmation requests for dangerous operations.
  */
 
@@ -50,10 +50,10 @@ class SecurityModal {
                 await fetch('/api/security/confirm', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token_id: this.currentTokenId, approved: approved })
+                    body: JSON.stringify({ token_id: this.currentTokenId, approved: approved }),
                 });
             } catch (e) {
-                console.error('[Security Modal] Failed to send approval:', e);
+                console.error('[SecurityModal] Failed to send response:', e);
             }
         }
         if (window.uiStateMachine) window.uiStateMachine.setState(UIState.IDLE);
