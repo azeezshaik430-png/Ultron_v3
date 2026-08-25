@@ -182,9 +182,10 @@ class BaseUltronAgent(BaseAgent, IService, ABC):
             return str(res.get("result", "Completed successfully."))
         return f"Error: {res.get('error', 'Task execution failed.')}"
 
-    def execute_task(self, task_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_task(self, task_id: str, payload: Dict[str, Any], max_retries: int = 2) -> Dict[str, Any]:
         """
-        Execute domain task with lifecycle telemetry, status management, and scratchpad logging.
+        Execute domain task with lifecycle telemetry, status management,
+        automatic retry with exponential backoff, and scratchpad logging.
         """
         t0 = time.perf_counter()
         with self._lock:
@@ -199,47 +200,63 @@ class BaseUltronAgent(BaseAgent, IService, ABC):
 
         self.append_scratchpad(task_id, f"Agent '{self.name}' started task execution.")
 
-        try:
-            result = self._do_execute_task(task_id, payload)
-            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                result = self._do_execute_task(task_id, payload)
+                elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
-            with self._lock:
-                self._active_tasks.pop(task_id, None)
-                self.status = AgentStatus.ONLINE
-                self._metrics["tasks_executed"] += 1
-                self._metrics["total_execution_time_ms"] += elapsed_ms
-
-            self.append_scratchpad(task_id, f"Agent '{self.name}' completed task in {elapsed_ms:.2f} ms.")
-            return {
-                "status": "SUCCESS",
-                "task_id": task_id,
-                "agent_id": self.agent_id,
-                "result": result,
-                "elapsed_ms": elapsed_ms,
-            }
-        except Exception as ex:
-            elapsed_ms = (time.perf_counter() - t0) * 1000.0
-            logger.error(f"[{self.name}] Task '{task_id}' exception: {ex}")
-
-            with self._lock:
-                self._active_tasks.pop(task_id, None)
-                self.status = AgentStatus.DEGRADED
-                self._metrics["tasks_failed"] += 1
-
-            self.append_scratchpad(task_id, f"Agent '{self.name}' task failed: {ex}")
-
-            with self._lock:
-                # Restore to ONLINE if no other active tasks
-                if not self._active_tasks:
+                with self._lock:
+                    self._active_tasks.pop(task_id, None)
                     self.status = AgentStatus.ONLINE
+                    self._metrics["tasks_executed"] += 1
+                    self._metrics["total_execution_time_ms"] += elapsed_ms
 
-            return {
-                "status": "ERROR",
-                "task_id": task_id,
-                "agent_id": self.agent_id,
-                "error": str(ex),
-                "elapsed_ms": elapsed_ms,
-            }
+                if attempt > 0:
+                    logger.info(f"[{self.name}] Task '{task_id}' succeeded on attempt {attempt + 1}")
+                self.append_scratchpad(task_id, f"Agent '{self.name}' completed task in {elapsed_ms:.2f} ms.")
+                return {
+                    "status": "SUCCESS",
+                    "task_id": task_id,
+                    "agent_id": self.agent_id,
+                    "result": result,
+                    "elapsed_ms": elapsed_ms,
+                    "attempts": attempt + 1,
+                }
+            except Exception as ex:
+                last_error = ex
+                elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+                if attempt < max_retries:
+                    backoff = min(2 ** attempt, 4)
+                    logger.warning(
+                        f"[{self.name}] Task '{task_id}' attempt {attempt + 1} failed: {ex}. "
+                        f"Retrying in {backoff}s..."
+                    )
+                    self.append_scratchpad(task_id, f"Agent '{self.name}' attempt {attempt + 1} failed: {ex}. Retrying.")
+                    time.sleep(backoff)
+                else:
+                    logger.error(f"[{self.name}] Task '{task_id}' failed after {max_retries + 1} attempts: {ex}")
+
+        # All retries exhausted
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        with self._lock:
+            self._active_tasks.pop(task_id, None)
+            self.status = AgentStatus.DEGRADED
+            self._metrics["tasks_failed"] += 1
+            if not self._active_tasks:
+                self.status = AgentStatus.ONLINE
+
+        self.append_scratchpad(task_id, f"Agent '{self.name}' task failed after {max_retries + 1} attempts: {last_error}")
+
+        return {
+            "status": "ERROR",
+            "task_id": task_id,
+            "agent_id": self.agent_id,
+            "error": str(last_error),
+            "elapsed_ms": elapsed_ms,
+            "attempts": max_retries + 1,
+        }
 
     @abstractmethod
     def _do_execute_task(self, task_id: str, payload: Dict[str, Any]) -> Any:

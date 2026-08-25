@@ -61,28 +61,39 @@ def build_system_prompt(prompt: str) -> str:
     return "\n\n".join(parts)
 
 
+def _build_messages(prompt: str, system_content: str, history_limit: int = 10) -> list:
+    """Build multi-turn message list with conversation history for Ollama."""
+    messages = [{"role": "system", "content": system_content}]
+
+    # Include recent conversation turns as proper message roles
+    chats = get_recent_chats(limit=history_limit)
+    for chat in chats:
+        user_msg = chat.get("user", "")
+        assistant_msg = chat.get("assistant", "")
+        if user_msg:
+            messages.append({"role": "user", "content": user_msg})
+        if assistant_msg:
+            messages.append({"role": "assistant", "content": assistant_msg})
+
+    # Current user message
+    messages.append({"role": "user", "content": prompt})
+    return messages
+
+
 def ask_ollama(prompt: str) -> str:
-    """Generate response using Ollama local AI model with low latency and language responsiveness."""
+    """Generate response using Ollama local AI model with multi-turn context."""
     try:
         system_content = build_system_prompt(prompt)
+        messages = _build_messages(prompt, system_content)
 
         response = ollama.chat(
             model=MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_content
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
+            messages=messages,
             options={
-                "num_predict": 128,
+                "num_predict": 256,
                 "temperature": 0.6,
                 "keep_alive": "10m",
-                "num_ctx": 2048,
+                "num_ctx": 4096,
             }
         )
 
@@ -95,24 +106,19 @@ def ask_ollama(prompt: str) -> str:
 
 
 def ask_ollama_stream(prompt: str):
-    """Stream response tokens incrementally from Ollama local AI model with low latency."""
+    """Stream response tokens incrementally with multi-turn context."""
     try:
         system_content = build_system_prompt(prompt)
+        messages = _build_messages(prompt, system_content)
 
         response = ollama.chat(
             model=MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_content
-                },
-                {"role": "user", "content": prompt}
-            ],
+            messages=messages,
             options={
-                "num_predict": 128,
+                "num_predict": 256,
                 "temperature": 0.6,
                 "keep_alive": "10m",
-                "num_ctx": 2048,
+                "num_ctx": 4096,
             },
             stream=True
         )

@@ -265,7 +265,7 @@ class VisionAgent(BaseUltronAgent):
             }
 
     def _analyze_image(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze image or current screen content."""
+        """Analyze image or current screen content with structured output."""
         image_path = payload.get("filepath") or payload.get("image_path")
         prompt = payload.get("prompt") or payload.get("query") or "Describe what is visible in this image."
 
@@ -283,13 +283,33 @@ class VisionAgent(BaseUltronAgent):
             }
 
         ocr_res = self._run_ocr({"filepath": image_path})
-        text_content = ocr_res.get("text", "")
+        raw_text = ocr_res.get("text", "")
+
+        # Clean and structure OCR output
+        cleaned_text = self._clean_ocr_text(raw_text)
+        word_count = len(cleaned_text.split()) if cleaned_text else 0
+        line_count = len(cleaned_text.splitlines()) if cleaned_text else 0
+
+        # Detect potential UI elements from OCR patterns
+        ui_elements = self._detect_ui_elements(cleaned_text)
+
+        # Get image dimensions if PIL available
+        dimensions = "unknown"
+        if HAS_PIL:
+            try:
+                from PIL import Image
+                img = Image.open(image_path)
+                dimensions = f"{img.width}x{img.height}"
+            except Exception:
+                pass
 
         analysis_summary = (
-            f"Screen/Image analysis of '{os.path.basename(image_path)}':\n"
+            f"Screen Analysis of '{os.path.basename(image_path)}' ({dimensions}):\n"
             f"Prompt: {prompt}\n"
-            f"Extracted Screen Content: {text_content[:200]}"
+            f"OCR Text ({word_count} words, {line_count} lines):\n{cleaned_text[:500]}"
         )
+        if ui_elements:
+            analysis_summary += f"\n\nDetected UI elements: {', '.join(ui_elements)}"
 
         return {
             "status": "SUCCESS",
@@ -298,3 +318,55 @@ class VisionAgent(BaseUltronAgent):
             "analysis": analysis_summary,
             "result": analysis_summary,
         }
+
+    def _clean_ocr_text(self, text: str) -> str:
+        """Clean and format OCR output for readability."""
+        if not text:
+            return ""
+        import re
+        # Remove excessive whitespace
+        lines = text.splitlines()
+        cleaned = []
+        for line in lines:
+            line = line.strip()
+            if line:
+                # Remove lines that are just special characters
+                if re.sub(r'[^a-zA-Z0-9]', '', line):
+                    cleaned.append(line)
+        # Deduplicate consecutive identical lines
+        deduped = []
+        for line in cleaned:
+            if not deduped or line != deduped[-1]:
+                deduped.append(line)
+        return "\n".join(deduped)
+
+    def _detect_ui_elements(self, text: str) -> list:
+        """Detect potential UI elements from OCR text patterns."""
+        if not text:
+            return []
+        elements = []
+        text_lower = text.lower()
+
+        # Detect buttons
+        button_words = ["button", "submit", "send", "cancel", "ok", "save", "delete"]
+        for word in button_words:
+            if word in text_lower:
+                elements.append(f"button:{word}")
+
+        # Detect input fields
+        input_words = ["search", "type here", "enter", "input", "email", "password"]
+        for word in input_words:
+            if word in text_lower:
+                elements.append(f"input:{word}")
+
+        # Detect navigation
+        nav_words = ["home", "menu", "back", "next", "settings", "profile"]
+        for word in nav_words:
+            if word in text_lower:
+                elements.append(f"nav:{word}")
+
+        # Detect links
+        if "http" in text_lower or "www." in text_lower:
+            elements.append("link:url_detected")
+
+        return elements[:10]  # Cap at 10 elements

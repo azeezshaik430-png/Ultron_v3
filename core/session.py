@@ -14,6 +14,10 @@ from typing import Optional, Dict, Any
 class SessionManager:
     """Thread-safe central session manager tracking ULTRON execution context."""
 
+    # Rate limiting defaults
+    RATE_LIMIT_MAX_COMMANDS: int = 10
+    RATE_LIMIT_WINDOW_SECONDS: float = 10.0
+
     def __init__(self) -> None:
         self._lock: threading.RLock = threading.RLock()
         self.is_authenticated: bool = False
@@ -26,6 +30,7 @@ class SessionManager:
         self.pending_confirmation: Optional[Dict[str, Any]] = None
         self.preferred_language: str = "en"
         self._confirmation_listeners: list = []
+        self._command_timestamps: list = []
 
     def register_confirmation_listener(self, callback: Any) -> None:
         """Register a callback function to be invoked when a security confirmation is requested."""
@@ -147,6 +152,24 @@ class SessionManager:
             except Exception:
                 pass
 
+    def check_rate_limit(self) -> bool:
+        """Check if command rate limit is exceeded. Returns True if OK, False if rate-limited."""
+        with self._lock:
+            now = time.time()
+            # Prune timestamps outside the window
+            self._command_timestamps = [
+                t for t in self._command_timestamps
+                if now - t < self.RATE_LIMIT_WINDOW_SECONDS
+            ]
+            if len(self._command_timestamps) >= self.RATE_LIMIT_MAX_COMMANDS:
+                return False
+            return True
+
+    def record_command(self) -> None:
+        """Record a command timestamp for rate limiting."""
+        with self._lock:
+            self._command_timestamps.append(time.time())
+
     def reset(self) -> None:
         """Reset session authentication and confirmation state (Thread-safe)."""
         with self._lock:
@@ -157,6 +180,7 @@ class SessionManager:
             self.current_agent = None
             self.pending_confirmation = None
             self.session_data.clear()
+            self._command_timestamps.clear()
 
     def set_current_task(self, task_name: Optional[str]) -> None:
         """Update current executing task (Thread-safe)."""

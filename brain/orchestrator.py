@@ -448,7 +448,43 @@ class Orchestrator:
         orig = original.lower().strip()
         t_id = f"task_{int(time.time() * 1000)}"
 
-        # 1. Research Agent Intent
+        # 0. Web Search Intent (before research — more specific)
+        web_search_triggers = [
+            "search the web", "search online", "search internet", "search for",
+            "google for", "google search", "look up", "find online",
+            "what is " , "who is ", "tell me about",
+        ]
+        is_web_search = False
+        web_query = ""
+        for trigger in web_search_triggers:
+            if trigger in cmd or trigger in orig:
+                is_web_search = True
+                web_query = cmd
+                for t in [trigger, "search the web", "search online", "search internet"]:
+                    web_query = web_query.replace(t, "")
+                web_query = web_query.strip()
+                break
+
+        if is_web_search and web_query:
+            res = self.agent_manager.dispatch_task("research_agent", t_id, {
+                "action": "conduct_research",
+                "query": web_query,
+                "search_web": True,
+            })
+            if res.get("status") == "SUCCESS":
+                result_data = res.get("result", {})
+                summary = result_data.get("summary", "")
+                findings = result_data.get("findings", [])
+                if summary:
+                    return f"Here's what I found, Boss: {summary}"
+                if findings:
+                    top = findings[0] if findings else "No results found."
+                    return f"Here's what I found, Boss: {top}"
+                return f"Search completed for '{web_query}', but no detailed results were found."
+            elif res.get("status") == "ERROR":
+                return f"Web search notice: {res.get('error', 'Search failed')}"
+
+        # 1. Research Agent Intent (local/file-based)
         if cmd.startswith("research ") or orig.startswith("research ") or "conduct research on" in cmd or "investigate topic" in cmd:
             query = cmd.replace("research", "").replace("conduct research on", "").replace("investigate topic", "").strip()
             res = self.agent_manager.dispatch_task("research_agent", t_id, {
@@ -606,6 +642,68 @@ class Orchestrator:
                 return f"Message sent to {target}, Boss."
             else:
                 return f"I couldn't send the message because: {res.get('reason')}"
+
+        # 6B. Computer-Use Mode
+        if any(k in norm for k in ["start computer use", "computer use mode", "enable computer use", "enter computer use"]):
+            from core.computer_use import activate_computer_use
+            return activate_computer_use()
+        if any(k in norm for k in ["stop computer use", "exit computer use", "disable computer use"]):
+            from core.computer_use import deactivate_computer_use
+            return deactivate_computer_use()
+        if any(k in norm for k in ["computer use"]):
+            from core.computer_use import is_computer_use_active, execute_computer_use_task
+            if is_computer_use_active():
+                return execute_computer_use_task(
+                    task_description=orig,
+                    vision_agent=getattr(self, '_vision_agent', None),
+                    agent_manager=self.agent_manager,
+                ).get("result", "Computer use task completed.")
+
+        # 7A. Process Management Intent
+        process_triggers = ["what processes", "what's running", "list processes", "show processes", "task manager"]
+        if any(k in norm for k in process_triggers):
+            from skills.process_control import list_processes
+            return list_processes(top_n=10)
+
+        if any(k in norm for k in ["kill process", "kill ", "terminate "]):
+            # Extract process name
+            proc_name = norm
+            for trigger in ["kill process", "terminate process", "kill ", "terminate "]:
+                if trigger in norm:
+                    proc_name = norm[norm.index(trigger) + len(trigger):].strip()
+                    break
+            if proc_name:
+                from skills.process_control import kill_process
+                return kill_process(proc_name)
+            return "Which process should I kill, Boss?"
+
+        if any(k in norm for k in ["how much memory", "process info", "find process"]):
+            proc_name = norm
+            for trigger in ["how much memory", "process info", "find process"]:
+                if trigger in norm:
+                    proc_name = norm[norm.index(trigger) + len(trigger):].strip()
+                    break
+            if proc_name:
+                from skills.process_control import get_process_info
+                return get_process_info(proc_name)
+            return "Which process, Boss?"
+
+        # 7B. Clipboard Intent
+        if any(k in norm for k in ["copy to clipboard", "copy this", "copy it"]):
+            # Extract text to copy — everything after "copy" keywords
+            copy_text = norm
+            for trigger in ["copy to clipboard", "copy this", "copy it", "copy"]:
+                if trigger in norm:
+                    copy_text = norm[norm.index(trigger) + len(trigger):].strip()
+                    break
+            if copy_text:
+                from skills.clipboard_control import copy_to_clipboard
+                return copy_to_clipboard(copy_text)
+            return "What should I copy, Boss?"
+
+        if any(k in norm for k in ["what's on my clipboard", "clipboard contents", "read clipboard", "paste from clipboard"]):
+            from skills.clipboard_control import get_clipboard_content
+            return get_clipboard_content()
 
         KNOWN_WEBSITES = {
             "youtube": "https://www.youtube.com",
@@ -825,6 +923,12 @@ class Orchestrator:
 
         if not command and not original:
             return "Waiting Boss"
+
+        # Rate limiting: reject rapid-fire commands
+        if not session.check_rate_limit():
+            logger.warning("[Orchestrator] Rate limit exceeded — command rejected")
+            return "Too many commands too fast, Boss. Please slow down."
+        session.record_command()
 
         logger.info(f"Processing Command: '{original}' (cleaned: '{command}')")
         event_bus.publish("SPEECH_RECOGNIZED", text=original_command)

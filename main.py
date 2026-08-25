@@ -30,6 +30,12 @@ def start_ultron() -> None:
     from voice.voice_guard import preload_voice_guard
     preload_voice_guard()
 
+    # Start memory consolidation scheduler
+    from brain.memory_consolidator import memory_consolidator
+    memory_consolidator.start()
+    # Run initial consolidation on boot
+    memory_consolidator.consolidate_now()
+
     speak(f"Welcome back {config.OWNER_NAME}. {config.ASSISTANT_NAME} system is online.")
 
     try:
@@ -39,7 +45,16 @@ def start_ultron() -> None:
                 session.enter_active()
 
                 first_turn = True
+                last_activity = time.time()
+                inactivity_timeout = 120  # seconds before auto-sleep
                 while session.is_active_mode:
+                    # Auto-sleep on inactivity
+                    if not first_turn and not session.pending_confirmation:
+                        if time.time() - last_activity > inactivity_timeout:
+                            speak("No activity detected. Going to sleep Boss.")
+                            session.enter_sleep()
+                            break
+
                     if first_turn and initial_cmd:
                         command = initial_cmd
                         first_turn = False
@@ -77,6 +92,7 @@ def start_ultron() -> None:
                         speak("Goodbye Boss. Shutting down ULTRON.")
                         return
 
+                    last_activity = time.time()
                     result = orchestrator.process_command(command_str)
                     logger.info(f"{config.ASSISTANT_NAME}: {result}")
                     if not session.session_data.pop("_already_spoken", False):

@@ -224,11 +224,12 @@ class ResearchAgent(BaseUltronAgent):
     def retrieve_information(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
         Information retrieval capability.
-        Supports file-based retrieval and optional external providers.
+        Supports file-based retrieval, web search, and optional external providers.
         """
         query = payload.get("query", "").lower()
         search_path = payload.get("search_path")
         provider = payload.get("provider")
+        search_web = payload.get("search_web", False)
 
         # Handle explicit missing provider request honestly
         if provider == "unconfigured_web_provider" or payload.get("require_external_api"):
@@ -237,6 +238,53 @@ class ResearchAgent(BaseUltronAgent):
                 "reason": f"External search provider '{provider or 'web_api'}' is not configured or missing API credentials.",
                 "sources": [],
             }
+
+        # Web search via DuckDuckGo
+        if search_web or provider in ("web", "duckduckgo", "internet"):
+            try:
+                from skills.web_search import search_web as ddg_search
+                web_result = ddg_search(payload.get("query", query), max_results=payload.get("max_results", 5))
+                if web_result.get("status") == "SUCCESS":
+                    sources = []
+                    for r in web_result.get("results", []):
+                        sources.append({
+                            "source_id": f"web_{uuid.uuid4().hex[:6]}",
+                            "url_or_path": r.get("url", ""),
+                            "title": r.get("title", ""),
+                            "snippet": r.get("snippet", ""),
+                            "reliability_score": 0.7,
+                            "domain": "web_search",
+                        })
+                    answer = web_result.get("answer")
+                    if answer:
+                        sources.insert(0, {
+                            "source_id": f"web_answer_{uuid.uuid4().hex[:6]}",
+                            "url_or_path": "duckduckgo_instant",
+                            "title": "Instant Answer",
+                            "snippet": answer,
+                            "reliability_score": 0.9,
+                            "domain": "duckduckgo",
+                        })
+                    return {
+                        "available": True,
+                        "query": query,
+                        "sources_count": len(sources),
+                        "sources": sources,
+                        "provider": "duckduckgo",
+                    }
+                else:
+                    return {
+                        "available": False,
+                        "reason": web_result.get("error", "Web search failed"),
+                        "sources": [],
+                    }
+            except Exception as e:
+                logger.warning(f"[{self.name}] Web search error: {e}")
+                return {
+                    "available": False,
+                    "reason": f"Web search error: {e}",
+                    "sources": [],
+                }
 
         # ACL check for file-based search
         if search_path:
