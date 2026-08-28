@@ -428,17 +428,88 @@ class WindowsAdapter(PlatformAdapter):
             return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
 
     def mouse_click(self, x: int, y: int, button: str = "left") -> Dict[str, Any]:
+        # Try pyautogui first (if installed)
         try:
             import pyautogui
             pyautogui.click(x, y, button=button)
             return {"available": True, "result": f"Clicked at ({x}, {y}).", "status": CapabilityStatus.SUPPORTED}
+        except ImportError:
+            pass  # Fall through to ctypes
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+
+        # ctypes fallback (Windows stdlib)
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            # Move cursor
+            user32.SetCursorPos(int(x), int(y))
+            # Button flags: down + up
+            if button == "right":
+                down_flag, up_flag = 0x0008, 0x0010
+            elif button == "middle":
+                down_flag, up_flag = 0x0020, 0x0040
+            else:
+                down_flag, up_flag = 0x0002, 0x0004
+            user32.mouse_event(down_flag, 0, 0, 0, 0)
+            user32.mouse_event(up_flag, 0, 0, 0, 0)
+            return {"available": True, "result": f"Clicked at ({x}, {y}) via ctypes.", "status": CapabilityStatus.SUPPORTED}
         except Exception as e:
             return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
 
     def keyboard_type(self, text: str) -> Dict[str, Any]:
+        # Try pyautogui first (if installed)
         try:
             import pyautogui
             pyautogui.typewrite(text)
             return {"available": True, "result": f"Typed '{text}'.", "status": CapabilityStatus.SUPPORTED}
+        except ImportError:
+            pass  # Fall through to ctypes
+        except Exception as e:
+            return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}
+
+        # ctypes fallback (Windows stdlib)
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            INPUT_KEYBOARD = 1
+            KEYEVENTF_KEYUP = 0x0002
+            KEYEVENTF_UNICODE = 0x0004
+
+            class KEYBDINPUT(ctypes.Structure):
+                _fields_ = [
+                    ("wVk", wintypes.WORD),
+                    ("wScan", wintypes.WORD),
+                    ("dwFlags", wintypes.DWORD),
+                    ("time", wintypes.DWORD),
+                    ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong)),
+                ]
+
+            class INPUT(ctypes.Structure):
+                _fields_ = [
+                    ("type", wintypes.DWORD),
+                    ("ki", KEYBDINPUT),
+                    ("padding", ctypes.c_byte * 8),
+                ]
+
+            user32 = ctypes.windll.user32
+            for char in text:
+                # Key down
+                inp_down = INPUT()
+                inp_down.type = INPUT_KEYBOARD
+                inp_down.ki.wVk = 0
+                inp_down.ki.wScan = ord(char)
+                inp_down.ki.dwFlags = KEYEVENTF_UNICODE
+                user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(INPUT))
+                # Key up
+                inp_up = INPUT()
+                inp_up.type = INPUT_KEYBOARD
+                inp_up.ki.wVk = 0
+                inp_up.ki.wScan = ord(char)
+                inp_up.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
+                user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(INPUT))
+
+            return {"available": True, "result": f"Typed '{text}' via ctypes.", "status": CapabilityStatus.SUPPORTED}
         except Exception as e:
             return {"available": False, "reason": str(e), "status": CapabilityStatus.NOT_AVAILABLE}

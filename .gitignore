@@ -18,6 +18,7 @@ logs/
 data/session.json
 data/conversation_history.json
 data/memory.json
+data/semantic_memory.json
 
 # Voice Samples & Media & Models
 voice/samples/
@@ -32,3 +33,9 @@ voice/models/
 Thumbs.db
 *.tmp
 *.bak
+
+# Temporary Test & Agent Data
+.freebuff/
+data/screenshots/
+data/browser_screenshots/
+data/test_xp/

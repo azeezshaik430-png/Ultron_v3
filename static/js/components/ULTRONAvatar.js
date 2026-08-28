@@ -1,7 +1,7 @@
 /**
- * ULTRON V3 — Premium Cinematic Humanoid Avatar
- * Three.js robotic AI visual with metallic materials, energy core,
- * glowing eyes, armor plates, holographic rings, and state-reactive lighting.
+ * ULTRON V3 — Cinematic 3D AI Reactor Core
+ * Inspired by deep concentric mechanical construction with energy network,
+ * glowing nodes, and a blazing central core. Fully 3D with perspective camera.
  */
 
 class ULTRONAvatar {
@@ -11,32 +11,39 @@ class ULTRONAvatar {
 
         this.container = this.canvas.parentElement;
         this.clock = new THREE.Clock();
-        this.stateMaterials = [];
-        this.glowMaterials = [];
-        this.energyPulse = 0;
-        this.breathPhase = 0;
-        this.ringRotation = 0;
+
+        this._targetEnergy = 1.0;
+        this._targetRotSpeed = 1.0;
+        this._curEnergy = 1.0;
+        this._curRotSpeed = 1.0;
 
         this._initScene();
-        this._buildRobot();
+        this._buildReactor();
         this._addLighting();
-        this._addEffects();
         this._resize();
         this._animate();
 
         window.addEventListener('resize', () => this._resize());
-
         if (window.uiStateMachine) {
             window.uiStateMachine.subscribe((s) => this._onState(s));
         }
     }
 
-    /* ── Scene Setup ── */
+    /* ═══════ SCENE ═══════ */
     _initScene() {
         this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(38, this._aspect(), 0.1, 100);
-        this.camera.position.set(0, 1.2, 6.5);
-        this.camera.lookAt(0, 0.8, 0);
+        this.scene.fog = new THREE.FogExp2(0x020304, 0.04);
+
+        this.camera = new THREE.PerspectiveCamera(35, this._aspect(), 0.1, 100);
+        this.camera.position.set(0, 0.5, 7.0);
+        this.camera.lookAt(0, 0, 0);
+
+        this._camOrbitRadius = 7.0;
+        this._camOrbitAngle = 0;
+        this._camOrbitTilt = 0.5;
+        this._camOrbitSpeed = 0.04;
+        this._camBreatheAmp = 0.06;
+        this._camBreatheSpeed = 0.3;
 
         this.renderer = new THREE.WebGLRenderer({
             canvas: this.canvas,
@@ -45,10 +52,11 @@ class ULTRONAvatar {
         });
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.1;
+        this.renderer.toneMappingExposure = 1.0;
         this.renderer.outputEncoding = THREE.sRGBEncoding;
-
-        this.scene.fog = new THREE.FogExp2(0x040506, 0.08);
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.setClearColor(0x000000, 0);
     }
 
     _aspect() {
@@ -56,460 +64,432 @@ class ULTRONAvatar {
         return this.container.clientWidth / Math.max(this.container.clientHeight, 1);
     }
 
-    /* ── Build Robot ── */
-    _buildRobot() {
-        this.robot = new THREE.Group();
-
-        const bodyMat = this._metalMat(0x22252a, 0.55);
-        const armorMat = this._metalMat(0x2e3036, 0.7);
-        const darkMat = this._metalMat(0x14151a, 0.8);
-        const jointMat = this._metalMat(0x1a1c22, 0.4);
-
-        this._buildHead(bodyMat, darkMat);
-        this._buildNeck(jointMat);
-        this._buildTorso(bodyMat, armorMat);
-        this._buildShoulders(armorMat);
-        this._buildArms(jointMat, bodyMat);
-        this._buildEnergyCore();
-        this._buildWaist(darkMat);
-
-        this.robot.position.y = -0.3;
-        this.scene.add(this.robot);
-    }
-
-    _metalMat(color, metalness) {
-        return new THREE.MeshStandardMaterial({
-            color,
-            metalness,
-            roughness: 0.35 - metalness * 0.15,
-            envMapIntensity: 0.8,
+    /* ═══════ MATERIALS ═══════ */
+    _mats() {
+        this.matHousing = new THREE.MeshStandardMaterial({
+            color: 0x1a1d24, metalness: 0.94, roughness: 0.12,
+        });
+        this.matHousingDark = new THREE.MeshStandardMaterial({
+            color: 0x0e1015, metalness: 0.9, roughness: 0.2,
+        });
+        this.matGold = new THREE.MeshStandardMaterial({
+            color: 0xd4a843, metalness: 0.95, roughness: 0.08,
+        });
+        this.matGoldDim = new THREE.MeshStandardMaterial({
+            color: 0x8b7230, metalness: 0.9, roughness: 0.16,
+        });
+        this.matGoldBright = new THREE.MeshStandardMaterial({
+            color: 0xf5c842, metalness: 0.85, roughness: 0.1,
+            emissive: 0xd4a843, emissiveIntensity: 0.3,
+        });
+        this.matAmber = new THREE.MeshStandardMaterial({
+            color: 0xe8a020, emissive: 0xe8a020, emissiveIntensity: 0.6,
+            metalness: 0.3, roughness: 0.3,
+            transparent: true, opacity: 0.6,
+        });
+        this.matCore = new THREE.MeshStandardMaterial({
+            color: 0xffffff, emissive: 0xffe8b0, emissiveIntensity: 3.0,
+            metalness: 0.0, roughness: 0.0,
+        });
+        this.matCoreGlow = new THREE.MeshBasicMaterial({
+            color: 0xd4a843, transparent: true, opacity: 0.2,
+        });
+        this.matCoreOuter = new THREE.MeshBasicMaterial({
+            color: 0xe8a020, transparent: true, opacity: 0.08,
+        });
+        this.matGlass = new THREE.MeshStandardMaterial({
+            color: 0xd4a843, transparent: true, opacity: 0.03,
+            metalness: 0.0, roughness: 0.05, side: THREE.DoubleSide,
+        });
+        this.matNetwork = new THREE.MeshBasicMaterial({
+            color: 0xd4a843, transparent: true, opacity: 0.25,
+        });
+        this.matNode = new THREE.MeshBasicMaterial({
+            color: 0xf5c842, transparent: true, opacity: 0.7,
+        });
+        this.matNodeSmall = new THREE.MeshBasicMaterial({
+            color: 0xd4a843, transparent: true, opacity: 0.5,
+        });
+        this.matPanel = new THREE.MeshStandardMaterial({
+            color: 0x12141a, metalness: 0.88, roughness: 0.22,
         });
     }
 
-    /* ── HEAD ── */
-    _buildHead(bodyMat, darkMat) {
-        const head = new THREE.Group();
+    /* ═══════ BUILD REACTOR ═══════ */
+    _buildReactor() {
+        this._mats();
+        this.reactor = new THREE.Group();
 
-        // Skull shell — elongated box with bevels
-        const skullGeo = new THREE.BoxGeometry(0.56, 0.52, 0.52);
-        const skull = new THREE.Mesh(skullGeo, bodyMat);
-        skull.position.y = 0;
-        head.add(skull);
+        this._buildDeepHousing();
+        this._buildConcentricRings();
+        this._buildNetworkLines();
+        this._buildNodes();
+        this._buildCoreAssembly();
+        this._buildSupportStruts();
 
-        // Top crest
-        const crestGeo = new THREE.BoxGeometry(0.3, 0.08, 0.4);
-        const crest = new THREE.Mesh(crestGeo, armorMat(0x2a2d32, 0.65));
-        crest.position.set(0, 0.28, 0);
-        head.add(crest);
+        this.scene.add(this.reactor);
 
-        function armorMat(c, m) {
-            return new THREE.MeshStandardMaterial({ color: c, metalness: m, roughness: 0.3 });
-        }
+        // Core lights
+        this.coreLight = new THREE.PointLight(0xd4a843, 3.0, 6.0, 1.5);
+        this.coreLight.position.set(0, 0, 0);
+        this.reactor.add(this.coreLight);
 
-        // Face plate — dark visor area
-        const faceGeo = new THREE.BoxGeometry(0.48, 0.28, 0.08);
-        const face = new THREE.Mesh(faceGeo, darkMat);
-        face.position.set(0, -0.04, 0.24);
-        head.add(face);
+        this.coreLight2 = new THREE.PointLight(0xffffff, 1.5, 3.0, 2);
+        this.coreLight2.position.set(0, 0, 0.1);
+        this.reactor.add(this.coreLight2);
 
-        // Eyes — glowing amber
-        const eyeMat = new THREE.MeshStandardMaterial({
-            color: 0xd4a843,
-            emissive: 0xd4a843,
-            emissiveIntensity: 1.8,
-            metalness: 0.2,
-            roughness: 0.1,
-        });
-        this.stateMaterials.push(eyeMat);
-
-        const eyeGeo = new THREE.BoxGeometry(0.1, 0.035, 0.02);
-
-        const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-        eyeL.position.set(-0.12, 0.0, 0.29);
-        head.add(eyeL);
-
-        const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
-        eyeR.position.set(0.12, 0.0, 0.29);
-        head.add(eyeR);
-
-        this.eyeL = eyeL;
-        this.eyeR = eyeR;
-        this.eyeMat = eyeMat;
-
-        // Brow ridges
-        const browGeo = new THREE.BoxGeometry(0.14, 0.025, 0.04);
-        const browMat = new THREE.MeshStandardMaterial({ color: 0x3a3d44, metalness: 0.6, roughness: 0.3 });
-
-        const browL = new THREE.Mesh(browGeo, browMat);
-        browL.position.set(-0.12, 0.045, 0.28);
-        browL.rotation.z = 0.1;
-        head.add(browL);
-
-        const browR = new THREE.Mesh(browGeo, browMat);
-        browR.position.set(0.12, 0.045, 0.28);
-        browR.rotation.z = -0.1;
-        head.add(browR);
-
-        // Chin detail
-        const chinGeo = new THREE.BoxGeometry(0.2, 0.04, 0.06);
-        const chin = new THREE.Mesh(chinGeo, bodyMat);
-        chin.position.set(0, -0.26, 0.2);
-        head.add(chin);
-
-        // Side vents
-        const ventGeo = new THREE.BoxGeometry(0.03, 0.12, 0.25);
-        const ventMat = new THREE.MeshStandardMaterial({ color: 0x1a1c22, metalness: 0.5, roughness: 0.4 });
-
-        const ventL = new THREE.Mesh(ventGeo, ventMat);
-        ventL.position.set(-0.3, -0.02, 0);
-        head.add(ventL);
-
-        const ventR = new THREE.Mesh(ventGeo, ventMat);
-        ventR.position.set(0.3, -0.02, 0);
-        head.add(ventR);
-
-        head.position.y = 2.55;
-        this.head = head;
-        this.robot.add(head);
+        this.warmFill = new THREE.PointLight(0xe8a020, 0.6, 4.0, 2);
+        this.warmFill.position.set(0, 0.3, 0.2);
+        this.reactor.add(this.warmFill);
     }
 
-    /* ── NECK ── */
-    _buildNeck(jointMat) {
-        const neckGeo = new THREE.CylinderGeometry(0.1, 0.12, 0.18, 8);
-        const neck = new THREE.Mesh(neckGeo, jointMat);
-        neck.position.y = 2.2;
-        this.robot.add(neck);
+    /* ── Deep Housing: massive outer rings with Z-depth ── */
+    _buildDeepHousing() {
+        const g = new THREE.Group();
 
-        // Neck ring
-        const ringGeo = new THREE.TorusGeometry(0.13, 0.015, 8, 16);
-        const ringMat = new THREE.MeshStandardMaterial({ color: 0xd4a843, emissive: 0xd4a843, emissiveIntensity: 0.3, metalness: 0.8, roughness: 0.2 });
-        const ring = new THREE.Mesh(ringGeo, ringMat);
-        ring.position.y = 2.15;
-        ring.rotation.x = Math.PI / 2;
-        this.robot.add(ring);
-    }
-
-    /* ── TORSO ── */
-    _buildTorso(bodyMat, armorMat) {
-        const torsoGroup = new THREE.Group();
-
-        // Main chest
-        const chestGeo = new THREE.BoxGeometry(0.9, 1.0, 0.55);
-        const chest = new THREE.Mesh(chestGeo, bodyMat);
-        chest.position.y = 1.55;
-        torsoGroup.add(chest);
-
-        // Chest armor plates (angled)
-        const plateGeo = new THREE.BoxGeometry(0.35, 0.4, 0.08);
-
-        const plateL = new THREE.Mesh(plateGeo, armorMat);
-        plateL.position.set(-0.22, 1.7, 0.28);
-        plateL.rotation.z = 0.08;
-        plateL.rotation.x = -0.05;
-        torsoGroup.add(plateL);
-
-        const plateR = new THREE.Mesh(plateGeo, armorMat);
-        plateR.position.set(0.22, 1.7, 0.28);
-        plateR.rotation.z = -0.08;
-        plateR.rotation.x = -0.05;
-        torsoGroup.add(plateR);
-
-        // Center chest ridge
-        const ridgeGeo = new THREE.BoxGeometry(0.06, 0.8, 0.12);
-        const ridgeMat = new THREE.MeshStandardMaterial({ color: 0x3a3d44, metalness: 0.6, roughness: 0.3 });
-        const ridge = new THREE.Mesh(ridgeGeo, ridgeMat);
-        ridge.position.set(0, 1.55, 0.3);
-        torsoGroup.add(ridge);
-
-        // Side panels
-        const sideGeo = new THREE.BoxGeometry(0.06, 0.9, 0.45);
-        const sideL = new THREE.Mesh(sideGeo, new THREE.MeshStandardMaterial({ color: 0x1a1c22, metalness: 0.4, roughness: 0.5 }));
-        sideL.position.set(-0.48, 1.55, 0);
-        torsoGroup.add(sideL);
-
-        const sideR = sideL.clone();
-        sideR.position.set(0.48, 1.55, 0);
-        torsoGroup.add(sideR);
-
-        // Abdominal segments
-        for (let i = 0; i < 3; i++) {
-            const segGeo = new THREE.BoxGeometry(0.7 - i * 0.04, 0.06, 0.4);
-            const seg = new THREE.Mesh(segGeo, new THREE.MeshStandardMaterial({ color: 0x1e2028, metalness: 0.5, roughness: 0.4 }));
-            seg.position.set(0, 1.08 - i * 0.1, 0.02);
-            torsoGroup.add(seg);
-        }
-
-        this.torsoGroup = torsoGroup;
-        this.robot.add(torsoGroup);
-    }
-
-    /* ── SHOULDERS ── */
-    _buildShoulders(armorMat) {
-        const shoulderGeo = new THREE.BoxGeometry(0.28, 0.22, 0.32);
-
-        const shoulderL = new THREE.Mesh(shoulderGeo, armorMat);
-        shoulderL.position.set(-0.62, 1.98, 0);
-        this.robot.add(shoulderL);
-
-        const shoulderR = new THREE.Mesh(shoulderGeo, armorMat);
-        shoulderR.position.set(0.62, 1.98, 0);
-        this.robot.add(shoulderR);
-
-        // Shoulder accent rings
-        const ringGeo = new THREE.TorusGeometry(0.16, 0.015, 8, 16);
-        const ringMat = new THREE.MeshStandardMaterial({
-            color: 0xd4a843,
-            emissive: 0xd4a843,
-            emissiveIntensity: 0.25,
-            metalness: 0.8,
-            roughness: 0.2,
-        });
-
-        const ringL = new THREE.Mesh(ringGeo, ringMat);
-        ringL.position.set(-0.62, 1.98, 0.17);
-        this.robot.add(ringL);
-
-        const ringR = new THREE.Mesh(ringGeo, ringMat);
-        ringR.position.set(0.62, 1.98, 0.17);
-        this.robot.add(ringR);
-
-        this.shoulderRingL = ringL;
-        this.shoulderRingR = ringR;
-    }
-
-    /* ── ARMS ── */
-    _buildArms(jointMat, bodyMat) {
-        const buildArm = (side) => {
-            const x = side === 'L' ? -0.62 : 0.62;
-            const arm = new THREE.Group();
-
-            // Upper arm
-            const upperGeo = new THREE.CylinderGeometry(0.08, 0.07, 0.5, 8);
-            const upper = new THREE.Mesh(upperGeo, bodyMat);
-            upper.position.y = -0.3;
-            arm.add(upper);
-
-            // Elbow joint
-            const elbowGeo = new THREE.SphereGeometry(0.07, 8, 8);
-            const elbow = new THREE.Mesh(elbowGeo, jointMat);
-            elbow.position.y = -0.55;
-            arm.add(elbow);
-
-            // Forearm
-            const foreGeo = new THREE.CylinderGeometry(0.065, 0.055, 0.45, 8);
-            const fore = new THREE.Mesh(foreGeo, bodyMat);
-            fore.position.y = -0.8;
-            arm.add(fore);
-
-            // Hand
-            const handGeo = new THREE.BoxGeometry(0.1, 0.12, 0.08);
-            const hand = new THREE.Mesh(handGeo, jointMat);
-            hand.position.y = -1.08;
-            arm.add(hand);
-
-            // Arm accent line
-            const lineGeo = new THREE.BoxGeometry(0.02, 0.4, 0.02);
-            const lineMat = new THREE.MeshStandardMaterial({ color: 0xd4a843, emissive: 0xd4a843, emissiveIntensity: 0.15 });
-            const line = new THREE.Mesh(lineGeo, lineMat);
-            line.position.set(side === 'L' ? 0.05 : -0.05, -0.3, 0.07);
-            arm.add(line);
-
-            arm.position.set(x, 1.85, 0);
-            return arm;
-        };
-
-        this.robot.add(buildArm('L'));
-        this.robot.add(buildArm('R'));
-    }
-
-    /* ── ENERGY CORE ── */
-    _buildEnergyCore() {
-        const coreGroup = new THREE.Group();
-
-        // Outer ring
-        const outerRingGeo = new THREE.TorusGeometry(0.14, 0.02, 12, 24);
-        const outerRingMat = new THREE.MeshStandardMaterial({
-            color: 0xd4a843,
-            emissive: 0xd4a843,
-            emissiveIntensity: 0.6,
-            metalness: 0.9,
-            roughness: 0.1,
-        });
-        const outerRing = new THREE.Mesh(outerRingGeo, outerRingMat);
-        outerRing.rotation.x = Math.PI / 2;
-        coreGroup.add(outerRing);
-        this.outerCoreRing = outerRing;
-
-        // Inner ring
-        const innerRingGeo = new THREE.TorusGeometry(0.08, 0.012, 8, 16);
-        const innerRingMat = new THREE.MeshStandardMaterial({
-            color: 0xf5c842,
-            emissive: 0xf5c842,
-            emissiveIntensity: 0.8,
-            metalness: 0.8,
-            roughness: 0.15,
-        });
-        const innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
-        innerRing.rotation.x = Math.PI / 2;
-        coreGroup.add(innerRing);
-        this.innerCoreRing = innerRing;
-
-        // Core sphere (emissive)
-        const coreGeo = new THREE.SphereGeometry(0.06, 16, 16);
-        const coreMat = new THREE.MeshStandardMaterial({
-            color: 0xf5c842,
-            emissive: 0xf5c842,
-            emissiveIntensity: 1.2,
-            metalness: 0.3,
-            roughness: 0.1,
-            transparent: true,
-            opacity: 0.9,
-        });
-        const core = new THREE.Mesh(coreGeo, coreMat);
-        coreGroup.add(core);
-        this.coreMat = coreMat;
-
-        coreGroup.position.set(0, 1.55, 0.35);
-        this.coreGroup = coreGroup;
-        this.robot.add(coreGroup);
-
-        // Point light from core
-        this.coreLight = new THREE.PointLight(0xd4a843, 1.5, 4);
-        this.coreLight.position.copy(coreGroup.position);
-        this.robot.add(this.coreLight);
-    }
-
-    /* ── WAIST ── */
-    _buildWaist(darkMat) {
-        const waistGeo = new THREE.BoxGeometry(0.65, 0.12, 0.4);
-        const waist = new THREE.Mesh(waistGeo, darkMat);
-        waist.position.y = 0.95;
-        this.robot.add(waist);
-
-        // Belt accent
-        const beltGeo = new THREE.BoxGeometry(0.66, 0.03, 0.42);
-        const beltMat = new THREE.MeshStandardMaterial({ color: 0xd4a843, metalness: 0.8, roughness: 0.2 });
-        const belt = new THREE.Mesh(beltGeo, beltMat);
-        belt.position.y = 0.93;
-        this.robot.add(belt);
-    }
-
-    /* ── Lighting ── */
-    _addLighting() {
-        // Key light — warm gold from above-right
-        const keyLight = new THREE.DirectionalLight(0xd4a843, 1.2);
-        keyLight.position.set(3, 5, 4);
-        this.scene.add(keyLight);
-
-        // Fill light — cool steel from left
-        const fillLight = new THREE.DirectionalLight(0x667788, 0.4);
-        fillLight.position.set(-3, 2, 2);
-        this.scene.add(fillLight);
-
-        // Rim light — from behind
-        const rimLight = new THREE.DirectionalLight(0xd4a843, 0.6);
-        rimLight.position.set(0, 3, -4);
-        this.scene.add(rimLight);
-
-        // Ambient
-        const ambient = new THREE.AmbientLight(0x111318, 0.6);
-        this.scene.add(ambient);
-
-        // Hemisphere
-        const hemi = new THREE.HemisphereLight(0x22252a, 0x08090b, 0.4);
-        this.scene.add(hemi);
-    }
-
-    /* ── Effects ── */
-    _addEffects() {
-        // Holographic rings around robot
-        this.holoRings = [];
-        const ringConfigs = [
-            { radius: 1.2, y: 1.5, speed: 0.3, opacity: 0.12 },
-            { radius: 1.5, y: 1.0, speed: -0.2, opacity: 0.08 },
-            { radius: 0.9, y: 2.0, speed: 0.4, opacity: 0.1 },
+        // 5 layers of housing torus, progressively deeper
+        const layers = [
+            { r: 2.4, tube: 0.14, z: 0.0, mat: this.matHousing },
+            { r: 2.55, tube: 0.06, z: 0.12, mat: this.matHousingDark },
+            { r: 2.55, tube: 0.06, z: -0.12, mat: this.matHousingDark },
+            { r: 2.65, tube: 0.04, z: 0.2, mat: this.matHousingDark },
+            { r: 2.65, tube: 0.04, z: -0.2, mat: this.matHousingDark },
         ];
 
-        for (const cfg of ringConfigs) {
-            const geo = new THREE.TorusGeometry(cfg.radius, 0.005, 4, 64);
-            const mat = new THREE.MeshBasicMaterial({
-                color: 0xd4a843,
-                transparent: true,
-                opacity: cfg.opacity,
-            });
-            const ring = new THREE.Mesh(geo, mat);
-            ring.position.y = cfg.y;
-            ring.rotation.x = Math.PI / 2 + 0.3;
-            ring.userData = { speed: cfg.speed };
-            this.scene.add(ring);
-            this.holoRings.push(ring);
+        this.housingRings = [];
+        for (const l of layers) {
+            const geo = new THREE.TorusGeometry(l.r, l.tube, 16, 80);
+            const m = new THREE.Mesh(geo, l.mat);
+            m.position.z = l.z;
+            m.castShadow = true;
+            m.receiveShadow = true;
+            g.add(m);
+            this.housingRings.push(m);
         }
 
-        // Floating particle dots
-        this.particles = [];
-        const particleGeo = new THREE.SphereGeometry(0.015, 6, 6);
-        const particleMat = new THREE.MeshBasicMaterial({ color: 0xd4a843, transparent: true, opacity: 0.4 });
+        // Gold accent rings on outer housing
+        for (const z of [0.14, -0.14]) {
+            const geo = new THREE.TorusGeometry(2.58, 0.015, 8, 80);
+            const m = new THREE.Mesh(geo, this.matGold);
+            m.position.z = z;
+            g.add(m);
+        }
 
-        for (let i = 0; i < 20; i++) {
-            const p = new THREE.Mesh(particleGeo, particleMat.clone());
-            const angle = (i / 20) * Math.PI * 2;
-            const radius = 1.0 + Math.random() * 0.8;
-            p.position.set(
-                Math.cos(angle) * radius,
-                0.5 + Math.random() * 2.5,
-                Math.sin(angle) * radius,
-            );
-            p.userData = {
-                angle,
-                radius,
-                speed: 0.1 + Math.random() * 0.3,
-                yBase: p.position.y,
-                yAmp: 0.05 + Math.random() * 0.1,
-            };
-            this.scene.add(p);
-            this.particles.push(p);
+        // Panel detail — 12 segments around the housing
+        for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2;
+            const geo = new THREE.BoxGeometry(0.25, 0.08, 0.28);
+            const m = new THREE.Mesh(geo, this.matPanel);
+            m.position.set(Math.cos(a) * 2.4, Math.sin(a) * 2.4, 0);
+            m.rotation.z = a;
+            m.castShadow = true;
+            g.add(m);
+
+            // Gold accent stripe on panel
+            const sGeo = new THREE.BoxGeometry(0.26, 0.012, 0.29);
+            const s = new THREE.Mesh(sGeo, this.matGoldDim);
+            s.position.set(Math.cos(a) * 2.4, Math.sin(a) * 2.4, 0);
+            s.rotation.z = a;
+            g.add(s);
+        }
+
+        // Bolts
+        for (let i = 0; i < 24; i++) {
+            const a = (i / 24) * Math.PI * 2;
+            const geo = new THREE.CylinderGeometry(0.018, 0.018, 0.03, 6);
+            const m = new THREE.Mesh(geo, this.matGoldDim);
+            m.position.set(Math.cos(a) * 2.52, Math.sin(a) * 2.52, 0.2);
+            m.rotation.x = Math.PI / 2;
+            g.add(m);
+        }
+
+        this.reactor.add(g);
+        this.outerHousing = g;
+    }
+
+    /* ── Concentric Rings: 8 rings at different Z-depths and tilts ── */
+    _buildConcentricRings() {
+        const ringDefs = [
+            { r: 2.0, tube: 0.04, z: 0.05, tiltX: 0, tiltY: 0, mat: this.matGold, speed: 0.08 },
+            { r: 1.85, tube: 0.025, z: -0.08, tiltX: 8, tiltY: 0, mat: this.matGoldDim, speed: -0.12 },
+            { r: 1.65, tube: 0.035, z: 0.12, tiltX: -5, tiltY: 3, mat: this.matGold, speed: 0.15 },
+            { r: 1.45, tube: 0.02, z: -0.05, tiltX: 12, tiltY: -4, mat: this.matGoldBright, speed: -0.2 },
+            { r: 1.25, tube: 0.03, z: 0.08, tiltX: -8, tiltY: 6, mat: this.matGold, speed: 0.25 },
+            { r: 1.05, tube: 0.018, z: -0.03, tiltX: 15, tiltY: -2, mat: this.matAmber, speed: -0.3 },
+            { r: 0.85, tube: 0.025, z: 0.06, tiltX: -3, tiltY: 10, mat: this.matGold, speed: 0.35 },
+            { r: 0.65, tube: 0.015, z: 0.0, tiltX: 6, tiltY: -8, mat: this.matAmber, speed: -0.4 },
+        ];
+
+        this.concentricRings = [];
+        for (const d of ringDefs) {
+            const geo = new THREE.TorusGeometry(d.r, d.tube, 12, 64);
+            const m = new THREE.Mesh(geo, d.mat);
+            m.position.z = d.z;
+            m.rotation.x = (d.tiltX * Math.PI) / 180;
+            m.rotation.y = (d.tiltY * Math.PI) / 180;
+            m.castShadow = true;
+            this.reactor.add(m);
+            this.concentricRings.push({ mesh: m, speed: d.speed, mat: d.mat });
+        }
+
+        // Tick marks on ring 1
+        for (let i = 0; i < 48; i++) {
+            const a = (i / 48) * Math.PI * 2;
+            const geo = new THREE.BoxGeometry(0.008, 0.04, 0.012);
+            const m = new THREE.Mesh(geo, this.matGoldDim);
+            m.position.set(Math.cos(a) * 2.0, Math.sin(a) * 2.0, 0.05);
+            m.rotation.z = a;
+            this.reactor.add(m);
         }
     }
 
-    /* ── State Handling ── */
+    /* ── Network Lines: thin golden energy paths connecting rings ── */
+    _buildNetworkLines() {
+        const lineGroup = new THREE.Group();
+
+        // Radial lines — 16 lines from outer to inner
+        for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * Math.PI * 2;
+            const innerR = 0.5;
+            const outerR = 2.0;
+
+            const points = [];
+            const segCount = 8;
+            for (let j = 0; j <= segCount; j++) {
+                const t = j / segCount;
+                const r = innerR + (outerR - innerR) * t;
+                const z = Math.sin(t * Math.PI) * 0.15; // slight depth curve
+                points.push(new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r, z));
+            }
+
+            const curve = new THREE.CatmullRomCurve3(points);
+            const tubeGeo = new THREE.TubeGeometry(curve, 12, 0.004, 4, false);
+            const tube = new THREE.Mesh(tubeGeo, this.matNetwork);
+            lineGroup.add(tube);
+        }
+
+        // Cross-connecting arcs at mid-radius
+        for (let i = 0; i < 8; i++) {
+            const a1 = (i / 8) * Math.PI * 2;
+            const a2 = ((i + 1) / 8) * Math.PI * 2;
+            const midR = 1.3;
+
+            const points = [];
+            const steps = 6;
+            for (let j = 0; j <= steps; j++) {
+                const t = j / steps;
+                const a = a1 + (a2 - a1) * t;
+                const r = midR + Math.sin(t * Math.PI) * 0.15;
+                const z = Math.sin(t * Math.PI * 2) * 0.08;
+                points.push(new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r, z));
+            }
+
+            const curve = new THREE.CatmullRomCurve3(points);
+            const tubeGeo = new THREE.TubeGeometry(curve, 8, 0.003, 4, false);
+            const tube = new THREE.Mesh(tubeGeo, this.matNetwork);
+            lineGroup.add(tube);
+        }
+
+        this.reactor.add(lineGroup);
+        this.networkLines = lineGroup;
+    }
+
+    /* ── Nodes: glowing intersection points ── */
+    _buildNodes() {
+        const nodeGroup = new THREE.Group();
+        this.nodeMeshes = [];
+
+        // Outer ring nodes (16)
+        for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * Math.PI * 2;
+            const geo = new THREE.SphereGeometry(0.03, 8, 8);
+            const m = new THREE.Mesh(geo, this.matNode.clone());
+            m.position.set(Math.cos(a) * 2.0, Math.sin(a) * 2.0, 0);
+            nodeGroup.add(m);
+            this.nodeMeshes.push(m);
+        }
+
+        // Mid ring nodes (12)
+        for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2;
+            const geo = new THREE.SphereGeometry(0.025, 8, 8);
+            const m = new THREE.Mesh(geo, this.matNode.clone());
+            m.position.set(Math.cos(a) * 1.3, Math.sin(a) * 1.3, Math.sin(a * 2) * 0.08);
+            nodeGroup.add(m);
+            this.nodeMeshes.push(m);
+        }
+
+        // Inner ring nodes (8)
+        for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            const geo = new THREE.SphereGeometry(0.02, 8, 8);
+            const m = new THREE.Mesh(geo, this.matNodeSmall.clone());
+            m.position.set(Math.cos(a) * 0.7, Math.sin(a) * 0.7, 0.04);
+            nodeGroup.add(m);
+            this.nodeMeshes.push(m);
+        }
+
+        this.reactor.add(nodeGroup);
+        this.nodeGroup = nodeGroup;
+    }
+
+    /* ── Core Assembly: layered energy core ── */
+    _buildCoreAssembly() {
+        // Innermost ring
+        const innerGeo = new THREE.TorusGeometry(0.45, 0.012, 10, 32);
+        this.innerRing = new THREE.Mesh(innerGeo, this.matAmber);
+        this.innerRing.position.z = 0.02;
+        this.reactor.add(this.innerRing);
+
+        // Energy containment ring
+        const eGeo = new THREE.TorusGeometry(0.35, 0.008, 8, 32);
+        this.energyRing = new THREE.Mesh(eGeo, this.matAmber);
+        this.energyRing.position.z = 0.03;
+        this.energyRing.rotation.x = 15 * Math.PI / 180;
+        this.reactor.add(this.energyRing);
+
+        // Second energy ring
+        const e2Geo = new THREE.TorusGeometry(0.28, 0.006, 8, 24);
+        this.energyRing2 = new THREE.Mesh(e2Geo, this.matAmber);
+        this.energyRing2.position.z = 0.025;
+        this.energyRing2.rotation.x = -20 * Math.PI / 180;
+        this.reactor.add(this.energyRing2);
+
+        // Wireframe inner mechanism
+        const icoGeo = new THREE.IcosahedronGeometry(0.3, 0);
+        const icoMat = new THREE.MeshBasicMaterial({
+            color: 0xd4a843, wireframe: true, transparent: true, opacity: 0.3,
+        });
+        this.innerIco = new THREE.Mesh(icoGeo, icoMat);
+        this.innerIco.position.z = 0.02;
+        this.reactor.add(this.innerIco);
+
+        // Core sphere — white-hot
+        const coreGeo = new THREE.SphereGeometry(0.12, 32, 32);
+        this.coreMesh = new THREE.Mesh(coreGeo, this.matCore);
+        this.coreMesh.position.z = 0.02;
+        this.reactor.add(this.coreMesh);
+
+        // Core glow shell 1
+        const glow1Geo = new THREE.SphereGeometry(0.2, 16, 16);
+        this.coreGlow1 = new THREE.Mesh(glow1Geo, this.matCoreGlow);
+        this.coreGlow1.position.z = 0.02;
+        this.reactor.add(this.coreGlow1);
+
+        // Core glow shell 2 (larger, more diffuse)
+        const glow2Geo = new THREE.SphereGeometry(0.35, 16, 16);
+        this.coreGlow2 = new THREE.Mesh(glow2Geo, this.matCoreOuter);
+        this.coreGlow2.position.z = 0.02;
+        this.reactor.add(this.coreGlow2);
+
+        // Glass dome over core
+        const domeGeo = new THREE.SphereGeometry(0.5, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+        this.glassDome = new THREE.Mesh(domeGeo, this.matGlass);
+        this.glassDome.rotation.x = -Math.PI / 2;
+        this.glassDome.position.z = 0.03;
+        this.reactor.add(this.glassDome);
+    }
+
+    /* ── Support Struts ── */
+    _buildSupportStruts() {
+        const strutMat = new THREE.MeshStandardMaterial({
+            color: 0x1a1c22, metalness: 0.9, roughness: 0.2,
+        });
+
+        for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            const outerR = 2.2;
+            const innerR = 0.55;
+
+            const ox = Math.cos(a) * outerR;
+            const oy = Math.sin(a) * outerR;
+            const ix = Math.cos(a) * innerR;
+            const iy = Math.sin(a) * innerR;
+
+            const length = Math.sqrt((ox - ix) ** 2 + (oy - iy) ** 2);
+            const geo = new THREE.CylinderGeometry(0.012, 0.012, length, 6);
+            const m = new THREE.Mesh(geo, strutMat);
+            m.position.set((ox + ix) / 2, (oy + iy) / 2, 0);
+            m.rotation.z = a + Math.PI / 2;
+            this.reactor.add(m);
+
+            // Bracket at outer end
+            const bGeo = new THREE.BoxGeometry(0.04, 0.04, 0.06);
+            const b = new THREE.Mesh(bGeo, this.matHousingDark);
+            b.position.set(ox, oy, 0);
+            this.reactor.add(b);
+
+            // Bracket at inner end
+            const biGeo = new THREE.BoxGeometry(0.025, 0.025, 0.04);
+            const bi = new THREE.Mesh(biGeo, this.matGoldDim);
+            bi.position.set(ix, iy, 0.02);
+            this.reactor.add(bi);
+        }
+    }
+
+    /* ═══════ LIGHTING ═══════ */
+    _addLighting() {
+        // Key — warm gold from above-right
+        const key = new THREE.DirectionalLight(0xd4a843, 1.0);
+        key.position.set(4, 5, 4);
+        key.castShadow = true;
+        key.shadow.mapSize.set(1024, 1024);
+        this.scene.add(key);
+
+        // Fill — steel from left
+        const fill = new THREE.DirectionalLight(0x888899, 0.25);
+        fill.position.set(-4, 2, 3);
+        this.scene.add(fill);
+
+        // Rim — behind
+        const rim = new THREE.DirectionalLight(0xd4a843, 0.4);
+        rim.position.set(0, 3, -5);
+        this.scene.add(rim);
+
+        // Bottom
+        const bottom = new THREE.DirectionalLight(0x8b7230, 0.12);
+        bottom.position.set(0, -4, 2);
+        this.scene.add(bottom);
+
+        this.scene.add(new THREE.AmbientLight(0x0a0b10, 0.35));
+        this.scene.add(new THREE.HemisphereLight(0x1a1d24, 0x060708, 0.25));
+    }
+
+    /* ═══════ STATE ═══════ */
     _onState(state) {
         const label = document.getElementById('avatarStateLabel');
         const map = {
-            IDLE:                 { color: 0xd4a843, emissive: 0x8b7230, label: 'STANDBY', intensity: 1.5 },
-            LISTENING:            { color: 0x33aa55, emissive: 0x1a6630, label: 'LISTENING', intensity: 1.8 },
-            THINKING:             { color: 0xe8a020, emissive: 0x8b5010, label: 'THINKING', intensity: 2.0 },
-            PROCESSING:           { color: 0xe8a020, emissive: 0x8b5010, label: 'PROCESSING', intensity: 2.0 },
-            SPEAKING:             { color: 0xf5c842, emissive: 0xaa8020, label: 'SPEAKING', intensity: 2.5 },
-            EXECUTING:            { color: 0xd4a843, emissive: 0x8b7230, label: 'EXECUTING', intensity: 2.0 },
-            WAITING_CONFIRMATION: { color: 0xcc3333, emissive: 0x881a1a, label: 'CONFIRM', intensity: 2.2 },
-            SUCCESS:              { color: 0x33aa55, emissive: 0x1a6630, label: 'SUCCESS', intensity: 2.0 },
-            ERROR:                { color: 0xcc3333, emissive: 0x881a1a, label: 'ERROR', intensity: 2.5 },
-            OFFLINE:              { color: 0x555555, emissive: 0x222222, label: 'OFFLINE', intensity: 0.3 },
+            IDLE:                 { energy: 1.0, rot: 1.0, label: 'STANDBY', color: 0xd4a843, ei: 3.0 },
+            LISTENING:            { energy: 1.4, rot: 1.5, label: 'LISTENING', color: 0xe8a020, ei: 3.5 },
+            THINKING:             { energy: 1.7, rot: 2.5, label: 'THINKING', color: 0xf5c842, ei: 4.0 },
+            PROCESSING:           { energy: 1.7, rot: 2.5, label: 'PROCESSING', color: 0xf5c842, ei: 4.0 },
+            SPEAKING:             { energy: 1.3, rot: 1.2, label: 'SPEAKING', color: 0xf5c842, ei: 3.5 },
+            EXECUTING:            { energy: 2.0, rot: 3.0, label: 'EXECUTING', color: 0xd4a843, ei: 4.0 },
+            WAITING_CONFIRMATION: { energy: 1.1, rot: 0.5, label: 'CONFIRM', color: 0xcc3333, ei: 3.5 },
+            SUCCESS:              { energy: 2.5, rot: 2.0, label: 'SUCCESS', color: 0x33aa55, ei: 4.5 },
+            ERROR:                { energy: 0.4, rot: 0.3, label: 'ERROR', color: 0xcc3333, ei: 1.5 },
+            OFFLINE:              { energy: 0.15, rot: 0.0, label: 'OFFLINE', color: 0x333333, ei: 0.5 },
         };
 
         const cfg = map[state] || map.IDLE;
+        this._targetEnergy = cfg.energy;
+        this._targetRotSpeed = cfg.rot;
 
-        // Update eye material
-        this.eyeMat.color.setHex(cfg.color);
-        this.eyeMat.emissive.setHex(cfg.emissive);
-        this.eyeMat.emissiveIntensity = cfg.intensity;
+        this.matCore.color.setHex(cfg.color);
+        this.matCore.emissive.setHex(cfg.color);
+        this.matCore.emissiveIntensity = cfg.ei;
 
-        // Update core
-        this.coreMat.color.setHex(cfg.color);
-        this.coreMat.emissive.setHex(cfg.emissive);
-        this.coreMat.emissiveIntensity = cfg.intensity * 0.8;
+        this.matCoreGlow.color.setHex(cfg.color);
+        this.matCoreOuter.color.setHex(cfg.color);
 
-        // Update core light
-        if (this.coreLight) {
-            this.coreLight.color.setHex(cfg.color);
-            this.coreLight.intensity = cfg.intensity * 0.8;
-        }
+        this.coreLight.color.setHex(cfg.color);
+        this.coreLight2.color.setHex(cfg.color);
+        this.warmFill.color.setHex(cfg.color);
 
-        // Update label
         if (label) label.textContent = cfg.label;
     }
 
-    /* ── Resize ── */
+    /* ═══════ RESIZE ═══════ */
     _resize() {
         if (!this.container || !this.renderer) return;
         const w = this.container.clientWidth;
@@ -520,55 +500,102 @@ class ULTRONAvatar {
         this.renderer.setSize(w, h);
     }
 
-    /* ── Animation Loop ── */
+    /* ═══════ ANIMATION ═══════ */
     _animate() {
         requestAnimationFrame(() => this._animate());
-        const dt = this.clock.getDelta();
-        const elapsed = this.clock.getElapsedTime();
+        const dt = Math.min(this.clock.getDelta(), 0.05);
+        const t = this.clock.getElapsedTime();
 
-        // Gentle robot sway
-        if (this.robot) {
-            this.robot.rotation.y = Math.sin(elapsed * 0.3) * 0.04;
-            this.robot.position.y = -0.3 + Math.sin(elapsed * 0.5) * 0.02;
+        const lerp = 1 - Math.pow(0.03, dt);
+        this._curEnergy += (this._targetEnergy - this._curEnergy) * lerp;
+        this._curRotSpeed += (this._targetRotSpeed - this._curRotSpeed) * lerp;
+        const E = this._curEnergy;
+        const RS = this._curRotSpeed;
+
+        // ── Camera orbit ──
+        this._camOrbitAngle += this._camOrbitSpeed * dt;
+        const cx = Math.sin(this._camOrbitAngle) * this._camOrbitRadius;
+        const cz = Math.cos(this._camOrbitAngle) * this._camOrbitRadius;
+        const cb = Math.sin(t * this._camBreatheSpeed) * this._camBreatheAmp;
+        this.camera.position.set(cx, this._camOrbitTilt + cb, cz);
+        this.camera.lookAt(0, 0, 0);
+
+        // ── Outer housing: very slow rotation ──
+        if (this.outerHousing) {
+            this.outerHousing.rotation.z += 0.015 * RS * dt;
         }
 
-        // Head subtle movement
-        if (this.head) {
-            this.head.rotation.y = Math.sin(elapsed * 0.7) * 0.03;
-            this.head.rotation.x = Math.sin(elapsed * 0.4) * 0.015;
+        // ── Concentric rings: each at its own speed ──
+        for (const ring of this.concentricRings) {
+            ring.mesh.rotation.z += ring.speed * RS * dt;
         }
 
-        // Energy core pulse
-        this.energyPulse = (Math.sin(elapsed * 2.5) + 1) * 0.5;
-        if (this.coreMat) {
-            this.coreMat.emissiveIntensity = 0.8 + this.energyPulse * 0.8;
+        // ── Inner ring ──
+        if (this.innerRing) {
+            this.innerRing.rotation.z += 0.35 * RS * dt;
         }
+
+        // ── Energy rings ──
+        if (this.energyRing) {
+            this.energyRing.rotation.z += 0.45 * RS * dt;
+            this.matAmber.emissiveIntensity = 0.3 + Math.sin(t * 2.0) * 0.25 * E + (E - 1) * 0.4;
+        }
+        if (this.energyRing2) {
+            this.energyRing2.rotation.z -= 0.55 * RS * dt;
+        }
+
+        // ── Wireframe icosahedron ──
+        if (this.innerIco) {
+            this.innerIco.rotation.x += 0.2 * RS * dt;
+            this.innerIco.rotation.y += 0.15 * RS * dt;
+        }
+
+        // ── Core breathing ──
+        if (this.coreMesh) {
+            const cs = 1.0 + Math.sin(t * 2.2) * 0.05 * E;
+            this.coreMesh.scale.setScalar(cs);
+            this.matCore.emissiveIntensity = 2.5 + Math.sin(t * 2.5) * 0.4 * E + (E - 1) * 0.8;
+        }
+        if (this.coreGlow1) {
+            const gs1 = 1.0 + Math.sin(t * 1.8) * 0.08 * E;
+            this.coreGlow1.scale.setScalar(gs1);
+            this.coreGlow1.material.opacity = 0.15 + Math.sin(t * 2.0) * 0.08 * E;
+        }
+        if (this.coreGlow2) {
+            const gs2 = 1.0 + Math.sin(t * 1.2) * 0.06 * E;
+            this.coreGlow2.scale.setScalar(gs2);
+            this.coreGlow2.material.opacity = 0.06 + Math.sin(t * 1.5) * 0.04 * E;
+        }
+
+        // ── Core lights ──
         if (this.coreLight) {
-            this.coreLight.intensity = 1.0 + this.energyPulse * 0.8;
+            this.coreLight.intensity = 2.5 + Math.sin(t * 2.5) * 0.5 * E + (E - 1) * 0.8;
+        }
+        if (this.coreLight2) {
+            this.coreLight2.intensity = 1.2 + Math.sin(t * 3.0) * 0.3 * E;
         }
 
-        // Core rings rotation
-        if (this.outerCoreRing) {
-            this.outerCoreRing.rotation.z = elapsed * 0.5;
-        }
-        if (this.innerCoreRing) {
-            this.innerCoreRing.rotation.z = -elapsed * 0.8;
-        }
-
-        // Holographic rings
-        for (const ring of this.holoRings) {
-            ring.rotation.z += ring.userData.speed * dt;
-            ring.material.opacity = 0.06 + Math.sin(elapsed * 0.8 + ring.userData.speed * 10) * 0.04;
+        // ── Nodes pulsing ──
+        for (let i = 0; i < this.nodeMeshes.length; i++) {
+            const n = this.nodeMeshes[i];
+            const phase = i * 0.7;
+            n.material.opacity = 0.3 + Math.sin(t * 1.5 + phase) * 0.25 * E;
+            const ns = 1.0 + Math.sin(t * 2.0 + phase) * 0.15 * E;
+            n.scale.setScalar(ns);
         }
 
-        // Floating particles
-        for (const p of this.particles) {
-            const d = p.userData;
-            d.angle += d.speed * dt;
-            p.position.x = Math.cos(d.angle) * d.radius;
-            p.position.z = Math.sin(d.angle) * d.radius;
-            p.position.y = d.yBase + Math.sin(elapsed * d.speed * 2) * d.yAmp;
-            p.material.opacity = 0.2 + Math.sin(elapsed * 1.5 + d.angle) * 0.2;
+        // ── Network lines subtle pulse ──
+        if (this.networkLines) {
+            this.networkLines.children.forEach((child, i) => {
+                if (child.material) {
+                    child.material.opacity = 0.15 + Math.sin(t * 0.8 + i * 0.3) * 0.08 * E;
+                }
+            });
+        }
+
+        // ── Glass dome ──
+        if (this.glassDome) {
+            this.glassDome.material.opacity = 0.02 + Math.sin(t * 0.6) * 0.01;
         }
 
         this.renderer.render(this.scene, this.camera);
